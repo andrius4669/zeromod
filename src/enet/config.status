@@ -431,7 +431,7 @@ Copyright (C) 2012 Free Software Foundation, Inc.
 This config.status script is free software; the Free Software Foundation
 gives unlimited permission to copy, distribute and modify it."
 
-ac_pwd='/home/andrius/cube2/2013_02_03/sauerbraten/zeromod/enet'
+ac_pwd='/home/andrius/zeromod/src/enet'
 srcdir='.'
 INSTALL='/usr/bin/install -c'
 MKDIR_P='/usr/bin/mkdir -p'
@@ -859,12 +859,12 @@ S["mkdir_p"]="/usr/bin/mkdir -p"
 S["MKDIR_P"]="/usr/bin/mkdir -p"
 S["INSTALL_STRIP_PROGRAM"]="$(install_sh) -c -s"
 S["STRIP"]="strip"
-S["install_sh"]="${SHELL} /home/andrius/cube2/2013_02_03/sauerbraten/zeromod/enet/install-sh"
-S["MAKEINFO"]="${SHELL} /home/andrius/cube2/2013_02_03/sauerbraten/zeromod/enet/missing --run makeinfo"
-S["AUTOHEADER"]="${SHELL} /home/andrius/cube2/2013_02_03/sauerbraten/zeromod/enet/missing --run autoheader"
-S["AUTOMAKE"]="${SHELL} /home/andrius/cube2/2013_02_03/sauerbraten/zeromod/enet/missing --run automake-1.11"
-S["AUTOCONF"]="${SHELL} /home/andrius/cube2/2013_02_03/sauerbraten/zeromod/enet/missing --run autoconf"
-S["ACLOCAL"]="${SHELL} /home/andrius/cube2/2013_02_03/sauerbraten/zeromod/enet/missing --run aclocal-1.11"
+S["install_sh"]="${SHELL} /home/andrius/zeromod/src/enet/install-sh"
+S["MAKEINFO"]="${SHELL} /home/andrius/zeromod/src/enet/missing --run makeinfo"
+S["AUTOHEADER"]="${SHELL} /home/andrius/zeromod/src/enet/missing --run autoheader"
+S["AUTOMAKE"]="${SHELL} /home/andrius/zeromod/src/enet/missing --run automake-1.11"
+S["AUTOCONF"]="${SHELL} /home/andrius/zeromod/src/enet/missing --run autoconf"
+S["ACLOCAL"]="${SHELL} /home/andrius/zeromod/src/enet/missing --run aclocal-1.11"
 S["VERSION"]="1.3.6"
 S["PACKAGE"]="libenet"
 S["CYGPATH_W"]="echo"

@@ -2799,7 +2799,7 @@ namespace server
     
     struct _var_sec
     {
-        char *name;
+        const char *name;
         int priv;
     };
     vector<_var_sec *> _var_priv;    
@@ -3354,7 +3354,7 @@ namespace server
         long reserved;
     } __attribute__ ((packed));
     
-    _pluginfunc **_plfuncs;
+    _pluginfunc **_plfuncs = 0;
     
     void _load(const char *cmd, const char *args, clientinfo *ci)
     {
@@ -3375,14 +3375,37 @@ namespace server
         if(!h)
         {
             string msg;
-            formatstring(msg)("Failed to load module \"%s\"", argv[0]);
+            formatstring(msg)("Failed to load module \"%s\" (%s)", argv[0], dlerror());
             _notify("FAIL", msg, _N_OWNER|_N_ADMINS, ci, 1);
             return;
         }
         
-        //TODO
+        int (*initfunc)(void *);
+        *(void **)(&initfunc) = dlsym(h, "z_init");
+        if(!initfunc)
+        {
+            string msg;
+            formatstring(msg)("Failed to lookup symbol \"z_init\" (%s)", dlerror());
+            _notify("FAIL", msg, _N_ADMINS|_N_OWNER, ci, 1);
+            dlclose(h);
+            return;
+        }
         
-        dlclose(h);
+        if(!_plfuncs)
+        {
+            //TODO: fill plugfuns structure
+        }
+        
+        int ret = initfunc(_plfuncs);
+        
+        if(ret)
+        {
+            string msg;
+            formatstring(msg)("Plugin initialization function returned non zero error code (%i)", ret);
+            _notify("FAIL", msg, _N_ADMINS|_N_OWNER, ci, 1);
+            dlclose(h);
+            return;
+        }
     }
     
     void _pm(const char *cmd, const char *args, clientinfo *ci)
@@ -3429,6 +3452,7 @@ namespace server
     
     void _exec(const char *cmd, const char *args, clientinfo *ci)
     {
+        if(!args || !*args) return;
         _notify("EXEC", args, _N_OWNER|_N_ADMINS, ci, 1);
         execute(args);
     }
@@ -3543,7 +3567,8 @@ namespace server
         _funcs.add(new _funcdeclaration("exec", _PRIV_ADMIN, _exec));
         _funcs.add(new _funcdeclaration("stats", 0, _stats));
         _funcs.add(new _funcdeclaration("set", 0, _set));
-        _funcs.add(new _funcdeclaration("vars", 0, _showvars));     //TODO: remove then not testing
+        _funcs.add(new _funcdeclaration("vars", _PRIV_ADMIN, _showvars));     //TODO: remove then not testing
+        _funcs.add(new _funcdeclaration("load", _PRIV_ADMIN, _load));
     }
     
     void _privfail(clientinfo *ci)
