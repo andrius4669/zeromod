@@ -129,7 +129,7 @@ namespace server
 
         gamestate() : state(CS_DEAD), editstate(CS_DEAD), lifesequence(0) {}
 
-        bool isalive(int gamemillis)
+        bool isalive(int gamemillis)man
         {
             return state==CS_ALIVE || (state==CS_DEAD && gamemillis - lastdeath <= DEATHMILLIS);
         }
