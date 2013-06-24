@@ -3256,37 +3256,53 @@ namespace server
         sendf(-1, 1, "ris", N_SERVMSG, args);
     }
     void _man(const char *cmd, const char *args, clientinfo *ci) {
-		string _man_msg;
-		const char *_man_command_args;
-		const char *_man_command_help;
-		if(!args || !*args) return;
+		string msg;
+		const char *command_args;
+		const char *command_help;
+		if(!args || !*args) {
+            string msg;
+            
+            formatstring(msg)("\fs\f1[MAN] Possible commands:\n\f0");
+            strcat(msg, "stats, pm, man, help, info, version");
+            if(_getpriv(ci)>=_PRIV_ADMIN) {
+                strcat(msg, "\n\f3exec, load, set, showvars");
+            }
+            //TODO: add modules hook "commands" then module hooks are completed
+            strcat(msg, "\fr");
+            goto _sendf;
+        }
 		if(!strcmp(args, "wall")) {
-			_man_command_args = "string 'message'";
-			_man_command_help = "sends a message to the wall";
+			command_args = "<message>";
+			command_help = "prints a message on the wall";
 		} else if(!strcmp(args, "showvars")) {
-			_man_command_args = "";
-			_man_command_help = "lists all server-variables";
+			command_args = "";
+			command_help = "lists all server-variables";
 		} else if(!strcmp(args, "set")) {
-			_man_command_args = "string 'var_name', string 'var_value'";
-			_man_command_help = "edits a server-variable";
+			command_args = "<variable_name> <value>";
+			command_help = "sets a server-side variable";
 		} else if(!strcmp(args, "load")) {
-			_man_command_args = "string 'module-path'";
-			_man_command_help = "loads an external module";
+			command_args = "<module-path-string>";
+			command_help = "loads an external module";
 		} else if(!strcmp(args, "pm")) {
-			_man_command_args = "int 'cn', string 'message'";
-			_man_commands_help = "sends a pm to the given client-numbers (for more clients, type #pm cn1,cn2,etc message";
+			command_args = "<cn1>[,cn2[,cn3,...]] <message>";
+			commands_help = "sends a pm to the given client-numbers (for more clients, type #pm cn1,cn2,etc message)";
 		} else if(!strcmp(args, "stats")) {
-			_man_command_args = "[int cn]";
-			_man_command_help = "sends you your/a client stats for this match";
+			command_args = "[cn]";
+			command_help = "sends you your/a client stats for this match";
 		} else if(!strcmp(args, "exec")) {
-			_man_command_args = "string code";
-			_man_command_help = "executes a cubescript code";
+			command_args = "<cubescript-code>";
+			command_help = "executes a cubescript code";
 		} else if(!strcmp(args, "man") || !strcmp(args, "help") || !strcmp(args, "info")) {
-			_man_command_args = "string 'command'";
-			_man_command_help = "gives a manual for the asked command";
-		}
-		formatstring(_man_msg)("\fs\f0[\fr\fs%s\f0]\fr\fs(\f0ARGS\fr\fs: \f5%s\fr)\f4: \f2%s", args, _man_command_args, _man_command_help);
-		sendf(-1, 1, "ris", N_SERVMSG, _man_msg);
+			command_args = "[command]";
+			command_help = "gives a manual for the asked command or lists avaiable commands";
+		} else {    //TODO: add modules hook "man" and implement reading from files
+            formatstring(msg)("\fs\f1[MAN]\fr Man-page for module \"%s\" not found.", args);
+            goto _sendf;
+        }
+		formatstring(msg)("\fs\f1[MAN:USAGE]\fr %s %s\n\fs\f1[MAN:DESCRIPTION]\fr %s", args, command_args, command_help);
+        
+        _sendf:
+            sendf(ci?ci->clientnum:-1, 1, "ris" , N_SERVMSG, msg);
     }
     
     void _showvars(const char *cmd, const char *args, clientinfo *ci)
