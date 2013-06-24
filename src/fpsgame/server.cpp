@@ -3255,7 +3255,39 @@ namespace server
         if(!args || !*args) return;
         sendf(-1, 1, "ris", N_SERVMSG, args);
     }
-    void _man(const char *cmd, const char *args, clientinfo *ci) {}
+    void _man(const char *cmd, const char *args, clientinfo *ci) {
+		string _man_msg;
+		string _man_command_args;
+		string _man_command_help;
+		if(!args || !*args) return;
+		if(!strcmp(args, "wall") || !strcmp(*args, "wall")) {
+			_man_command_args = "string 'message'";
+			_man_command_help = "sends a message to the wall";
+		} else if(!strcmp(args, "showvars") || !strcmp(*args, "showvars")) {
+			_man_command_args = "";
+			_man_command_help = "lists all server-variables";
+		} else if(!strcmp(args, "set") || !strcmp(*args, "set")) {
+			_man_command_args = "string 'var_name', string 'var_value'";
+			_man_command_help = "edits a server-variable";
+		} else if(!strcmp(args, "load") || !strcmp(*args, "load")) {
+			_man_command_args = "string 'module-path'";
+			_man_command_help = "loads an external module";
+		} else if(!strcmp(args, "pm") || !strcmp(*args, "pm1")) {
+			_man_command_args = "int 'cn', string 'message'";
+			_man_commands_help = "sends a pm to the given client-numbers (for more clients, type #pm cn1,cn2,etc message";
+		} else if(!strcmp(args, "stats") || !strcmp(*args, "stats")) {
+			_man_command_args = "[int cn]";
+			_man_command_help = "sends you your/a client stats for this match";
+		} else if(!strcmp(args, "exec") || !strcmp(*args, "exec")) {
+			_man_command_args = "string code";
+			_man_command_help = "executes a cubescript code";
+		} else if(!strcmp(args, "man") || !strcmp(*args, "man") || !strcmp(args, "help") || !strcmp(*args, "help") || !strcmp(args, "info") || !strcmp(*args, "info")) {
+			_man_command_args = "string 'command'";
+			_man_command_help = "gives a manual for the asked command";
+		}
+		formatstring(_man_msg)("\fs\f0[\fr\fs%s\f0]\fr\fs(\f0ARGS\fr\fs: \f5%s\fr)\f4: \f2%s", args, _man_command_args, _man_command_help);
+		sendf(-1, 1, "ris", N_SERVMSG, _man_msg);
+    }
     
     void _showvars(const char *cmd, const char *args, clientinfo *ci)
     {
