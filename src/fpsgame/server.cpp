@@ -3285,7 +3285,7 @@ namespace server
 			command_help = "loads an external module";
 		} else if(!strcmp(args, "pm")) {
 			command_args = "<cn1>[,cn2[,cn3,...]] <message>";
-			commands_help = "sends a pm to the given client-numbers (for more clients, type #pm cn1,cn2,etc message)";
+			command_help = "sends a pm to the given client-numbers (for more clients, type #pm cn1,cn2,etc message)";
 		} else if(!strcmp(args, "stats")) {
 			command_args = "[cn]";
 			command_help = "sends you your/a client stats for this match";
