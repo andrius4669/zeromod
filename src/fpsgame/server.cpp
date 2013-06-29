@@ -2999,6 +2999,7 @@ namespace server
             {
                 _debug("_var_prepare:l>256");
                 _vars.drop();   //drop last added member
+                delete vs;
                 return 0;
             }
             vs->name = new char [l];
@@ -3006,6 +3007,7 @@ namespace server
             {
                 _debug("_var_prepare:vs->name==0");
                 _vars.drop();
+                delete vs;
                 return 0;
             }
             strcpy(vs->name, name);
@@ -3394,21 +3396,58 @@ namespace server
         }
     }
     
-    //TODO: module loading
     struct _pluginfunc
     {
         char name[64];
         void *ptr;
-        long reserved;
-    } __attribute__ ((packed));
+    };
     
-    _pluginfunc **_plfuncs = 0;
+    vector<_pluginfunc *> _plfuncs;
+    
+    void _setext(char *s, void *ptr)
+    {
+        _pluginfunc *p = 0;
+        for(int i = 0; i < _plfuncs.length(); i++)
+        {
+            if(_plfuncs[i] && !strcmp(s, _plfuncs[i]->name))
+            {
+                p = _plfuncs[i];
+                break;
+            }
+        }
+        if(!p)
+        {
+            p = new _pluginfunc;
+            if(!p) return;  //fatal 0_o
+            _plfuncs.add(p);
+            strncpy(p->name, s, 64);
+        }
+        
+        p->ptr = ptr;
+    }
+    
+    void _testfunc()
+    {
+        sendf(-1, 1, "ris", N_SERVMSG, "[DEBUG] Plugin test function");
+    }
+    
+    void * _getext(char *s)
+    {
+        if(!strcmp(s, "test")) return (void *)_testfunc;
+        else if(!strcmp(s, "setext")) return (void *)_setext;
+        else
+        {
+            for(int i = 0; i < _plfuncs.length(); i++)
+            {
+                if(_plfuncs[i] && !strcmp(s, _plfuncs[i]->name) && _plfuncs[i]->ptr) return _plfuncs[i]->ptr;
+            }
+        }
+        return 0;
+    }
     
     void _load(const char *cmd, const char *args, clientinfo *ci)
     {
         char *argv[2];
-        char *config[64];
-        int configc;
         char buf[MAXTRANS];
         
         if(!args || !*args) return;
@@ -3416,8 +3455,6 @@ namespace server
         strcpy(buf, args);
         
         _argsep(buf, 2, argv);
-        
-        configc = _argsep(argv[1], 64, config);
         
         void *h = dlopen(argv[0], RTLD_LAZY);
         if(!h)
@@ -3428,7 +3465,7 @@ namespace server
             return;
         }
         
-        int (*initfunc)(void *);
+        char *(*initfunc)(void *, void *, char *);
         *(void **)(&initfunc) = dlsym(h, "z_init");
         if(!initfunc)
         {
@@ -3439,17 +3476,13 @@ namespace server
             return;
         }
         
-        if(!_plfuncs)
-        {
-            //TODO: fill plugfuns structure
-        }
-        
-        int ret = initfunc(_plfuncs);
+        char *ret;
+        ret = initfunc((void *)_getext, (void *)_setext, argv[1]);
         
         if(ret)
         {
             string msg;
-            formatstring(msg)("Plugin initialization function returned non zero error code (%i)", ret);
+            formatstring(msg)("Plugin initialization function failed with error \"%s\"", ret);
             _notify("FAIL", msg, _N_ADMINS|_N_OWNER, ci, 1);
             dlclose(h);
             return;
