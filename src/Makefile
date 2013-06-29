@@ -148,6 +148,7 @@ libenet: enet/Makefile
 
 clean-enet: enet/Makefile
 	$(MAKE) -C enet/ clean
+	-$(RM) -rf enet/Makefile enet/autom4te.cache
 
 clean:
 	-$(RM) $(CLIENT_PCH) $(CLIENT_OBJS) $(SERVER_OBJS) $(MASTER_OBJS) sauer_client sauer_server sauer_master
