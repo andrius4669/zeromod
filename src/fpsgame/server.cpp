@@ -2768,19 +2768,7 @@ namespace server
         formatstring(buf)("\fs\f1[DEBUG] %s\fr", msg?msg:"");
         sendf(-1, 1, "ris", N_SERVMSG, buf);
     }
-    
-    //internal server privileges
-    enum
-    {
-        _PRIV_NONE = 0,     //simple player
-        _PRIV_MEMBER = 1,   //verified player
-        _PRIV_CLAIM = 2,    //setmaster 1
-        _PRIV_MASTER = 3,   //masterpass, login, priv passing, etc...
-        _PRIV_GLOBAL = 4,   //global auth
-        _PRIV_AUTH = 5,     //local auth, login, etc...
-        _PRIV_ADMIN = 6,    //adminpass, adminauth, login, etc
-        _PRIV_ROOT = 7      //rootpass, rootauth, rootlogin, internal server funtions, no restrictions
-    };
+
     //server variables
     enum
     {
@@ -2808,7 +2796,7 @@ namespace server
         _var_sec *vs;
         vs = new _var_sec;
         vs->name = "botname";
-        vs->priv = _PRIV_ADMIN;
+        vs->priv = PRIV_ADMIN;
         _var_priv.add(vs);
     }
     
@@ -3061,13 +3049,13 @@ namespace server
 */    
     int _var_getpriv(char *name)
     {
-        if(!name) return _PRIV_ROOT;
+        if(!name) return PRIV_ROOT;
         
         for(int i=0;i<_var_priv.length();i++)
         {
             if(_var_priv[i] && _var_priv[i]->name && !strcmp(name, _var_priv[i]->name)) return _var_priv[i]->priv;
         }
-        return _PRIV_ROOT;
+        return PRIV_ROOT;
     }
     
     bool _var_checkpriv(char *name, clientinfo *ci)
@@ -3266,7 +3254,7 @@ namespace server
             
             formatstring(msg)("\fs\f1[MAN] Possible commands:\n\f0");
             strcat(msg, "stats, pm, man, help, info, version");
-            if(_getpriv(ci)>=_PRIV_ADMIN) {
+            if(_getpriv(ci)>=PRIV_ADMIN) {
                 strcat(msg, "\n\f3exec, load, set, showvars");
             }
             //TODO: add modules hook "commands" then module hooks are completed
@@ -3376,7 +3364,7 @@ namespace server
         {
             formatstring(msg)("\fs\f0[VAR]\fr %s=%s", argv[0], argv[1]);
             int pr = _var_getpriv(argv[0]);
-            if(pr==_PRIV_NONE) sendf(-1, 1, "ris", N_SERVMSG, msg);
+            if(pr==PRIV_NONE) sendf(-1, 1, "ris", N_SERVMSG, msg);
             else
             {
                 for(int i=0;i<clients.length();i++)
@@ -3402,7 +3390,46 @@ namespace server
         void *ptr;
     };
     
-    vector<_pluginfunc *> _plfuncs;
+    vector<_pluginfunc *> _plfuncs; //plugin functions - intermodule communication
+    
+    struct _hookparam
+    {
+        void *args[8];
+    } __attribute__((packed));
+    
+    struct _hookfunc
+    {
+        int (*func)(_hookparam *);
+        int priority;
+    };
+    
+    struct _hookstruct
+    {
+        char name[16];
+        int num;
+        vector<_hookfunc> funcs;
+    };
+    
+    vector<_hookstruct *> _hookfuncs;
+    
+    _hookparam _hp;
+    
+    int _exechook_s(char *name, void *param)
+    {
+        if(!name || !*name) return -1;  //<0==fail
+        for(int i = 0; i < _hookfuncs.length(); i++)
+        {
+            if(_hookfuncs[i] && !strcmp(_hookfuncs[i]->name, name))
+            {
+                _hp.args[0] = param;
+                for(int j = 0; j < _hookfuncs[i]->funcs.length(); j++)
+                {
+                    _hookfuncs[i]->funcs[j].func(&_hp);
+                }
+                break;
+            }
+        }
+    }
     
     void _setext(char *s, void *ptr)
     {
@@ -3434,7 +3461,6 @@ namespace server
     void * _getext(char *s)
     {
         if(!strcmp(s, "test")) return (void *)_testfunc;
-        else if(!strcmp(s, "setext")) return (void *)_setext;
         else
         {
             for(int i = 0; i < _plfuncs.length(); i++)
@@ -3640,16 +3666,16 @@ namespace server
         _init_varpriv();
         
         _funcs.add(new _funcdeclaration("test", 0, _test));
-        _funcs.add(new _funcdeclaration("wall", _PRIV_MASTER, _wall));
+        _funcs.add(new _funcdeclaration("wall", PRIV_MASTER, _wall));
         _funcs.add(new _funcdeclaration("man", 0, _man));
         _funcs.add(new _funcdeclaration("help", 0, _man));
         _funcs.add(new _funcdeclaration("info", 0, _man));
         _funcs.add(new _funcdeclaration("pm", 0, _pm));
-        _funcs.add(new _funcdeclaration("exec", _PRIV_ADMIN, _exec));
+        _funcs.add(new _funcdeclaration("exec", PRIV_ADMIN, _exec));
         _funcs.add(new _funcdeclaration("stats", 0, _stats));
         _funcs.add(new _funcdeclaration("set", 0, _set));
-        _funcs.add(new _funcdeclaration("vars", _PRIV_ADMIN, _showvars));     //TODO: remove then not testing
-        _funcs.add(new _funcdeclaration("load", _PRIV_ADMIN, _load));
+        _funcs.add(new _funcdeclaration("vars", PRIV_ADMIN, _showvars));     //TODO: remove then not testing
+        _funcs.add(new _funcdeclaration("load", PRIV_ADMIN, _load));
     }
     
     void _privfail(clientinfo *ci)
@@ -3664,30 +3690,10 @@ namespace server
         _notify("FAIL", str, _N_OWNER, ci, 2);
     }
     
-    int _getpriv(clientinfo *ci)
+    inline int _getpriv(clientinfo *ci)
     {
-        if(!ci) return _PRIV_ROOT;
-        
-        switch(ci->privilege)
-        {
-            case PRIV_NONE:
-                if(ci->_xi.auth) return _PRIV_MEMBER;
-                else return _PRIV_NONE;
-            
-            case PRIV_MASTER:
-                if(ci->_xi.auth) return _PRIV_MASTER;
-                else return _PRIV_CLAIM;
-            
-            case PRIV_AUTH:
-                if(ci->_xi.auth) return _PRIV_AUTH;
-                else return _PRIV_GLOBAL;
-            
-            case PRIV_ADMIN:
-                if(ci->_xi.auth) return _PRIV_ROOT;
-                else return _PRIV_ADMIN;
-            
-            default: return _PRIV_NONE;
-        }
+        if(!ci) return PRIV_ROOT;
+        else return ci->privilege;
     }
     
     inline bool _checkpriv(clientinfo *ci, int priv)
@@ -4045,14 +4051,19 @@ namespace server
                 QUEUE_AI;
                 QUEUE_MSG;
                 getstring(text, p);
-                filtertext(text, text);
-                if(isdedicatedserver()) logoutf("%s: %s", colorname(cq), text);
-                if(text[0]=='#' || text[0]=='\\')
+
+                if(text[0]=='#')
                 {
                     cm->messages.drop();
+                    if(isdedicatedserver()) logoutf("%s: %s", colorname(cq), text);
                     _servcmd(text+1, ci);
                 }
-                else QUEUE_STR(text);
+                else
+                {
+                    filtertext(text, text);
+                    if(isdedicatedserver()) logoutf("%s: %s", colorname(cq), text);
+                    QUEUE_STR(text);
+                }
                 break;
             }
 
