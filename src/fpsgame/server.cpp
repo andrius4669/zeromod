@@ -213,7 +213,7 @@ namespace server
 
     struct _extrainfo
     {
-        bool auth;  //yes if client is authenticated (auth->localauth, admin->root)
+        bool editmute;
         
     };
     
@@ -1367,7 +1367,6 @@ namespace server
     void revokemaster(clientinfo *ci)
     {
         ci->privilege = PRIV_NONE;
-        ci->_xi.auth = false;
         if(ci->state.state==CS_SPECTATOR && !ci->local) aiman::removeai(ci);
     }
 
@@ -3666,10 +3665,11 @@ namespace server
         if(!cx)
         {
             formatstring(msg)("Unrecognised client number %i", cn);
-            _notify("FAIL", msg, _N_OWNER, 2);
+            _notify("FAIL", msg, _N_OWNER, ci, 2);
             return;
         }
-        formatstring(msg)("\fs\f1[IP:\f0%i\f1:\f7%s\f1] \f5%s\fr", cn, colorname(cx), cx->hostname);
+        uint ip = getclientip(cx->clientnum);
+        formatstring(msg)("\fs\f1[IP:\f0%i\f1:\f7%s\f1] \f5%i.%i.%i.%i\fr", cn, colorname(cx), (ip>>24)%0xFF, (ip>>16)%0xFF, (ip>>8)%0xFF, ip%0xFF);
         sendf(ci?ci->clientnum:-1, 1, "ris", N_SERVMSG, msg);
     }
     
