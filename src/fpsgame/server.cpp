@@ -3669,7 +3669,7 @@ namespace server
             return;
         }
         uint ip = getclientip(cx->clientnum);
-        formatstring(msg)("\fs\f1[IP:\f0%i\f1:\f7%s\f1] \f5%i.%i.%i.%i\fr", cn, colorname(cx), ip%0xFF, (ip>>8)%0xFF, (ip>>16)%0xFF, (ip>>24)%0xFF);
+        formatstring(msg)("\fs\f1[IP:\f0%i\f1:\f7%s\f1] \f5%i.%i.%i.%i\fr", cn, colorname(cx), (ip>>24)&0xFF, (ip>>16)&0xFF, (ip>>8)&0xFF, ip&0xFF);
         sendf(ci?ci->clientnum:-1, 1, "ris", N_SERVMSG, msg);
     }
     
