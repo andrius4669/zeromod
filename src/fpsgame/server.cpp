@@ -3595,7 +3595,8 @@ namespace server
     {
         string buf;
         char *argv[2];
-        int cn, cx, privilege;
+        int cn, privilege;
+        clientinfo *cx;
         
         if(!args || !*args)
         {
@@ -3631,7 +3632,7 @@ namespace server
                 else if(!strcmp(argv[1], "root")) privilege = PRIV_ROOT;
                 else
                 {
-                    man("usage", cmd, ci);
+                    _man("usage", cmd, ci);
                     return;
                 }
             }
