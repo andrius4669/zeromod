@@ -1,3 +1,4 @@
+#include <string.h>
 
 void *(* z_getext)(char *);
 void (* z_setext)(char *, void *);

@@ -3548,7 +3548,7 @@ namespace server
         }
         
         string msg;
-        formatstring(msg)("\fs\f0[PM:\fr%s\fs\f0]\fr %s", colorname(ci), argv[1]);
+        formatstring(msg)("\fs\f0[PM:\f1%i\f0:\fr%s\fs\f0]\fr %s", ci->clientnum, colorname(ci), argv[1]);
         
         for(int i=0;i<clientnums.length();i++)
         {
@@ -3648,6 +3648,38 @@ namespace server
         }
     }
     
+    void _getip(const char *cmd, const char *args, clientinfo *ci)
+    {
+        string msg;
+        if(!args || !*args)
+        {
+            _man(0, cmd?cmd:"getip", ci);
+            return;
+        }
+        int cn = atoi(args);
+        if(!cn && strcmp(args, "0"))
+        {
+            _man(0, cmd?cmd:"getip", ci);
+            return;
+        }
+        clientinfo *cx = getinfo(cn);
+        if(!cx)
+        {
+            formatstring(msg)("Unrecognised client number %i", cn);
+            _notify("FAIL", msg, _N_OWNER, 2);
+            return;
+        }
+        formatstring(msg)("\fs\f1[IP:\f0%i\f1:\f7%s\f1] \f5%s\fr", cn, colorname(cx), cx->hostname);
+        sendf(ci?ci->clientnum:-1, 1, "ris", N_SERVMSG, msg);
+    }
+    
+    void _info(const char *cmd, const char *args, clientinfo *ci)
+    {
+        string msg;
+        formatstring(msg)("\fs\f5[INFO] \f0zeromod server mod\n\f5[INFO] \f0Contributors: /dev/zero, haytham\fr");
+        sendf(ci?ci->clientnum:-1, 1, "ris", msg);
+    }
+    
 //  >>> Server internals
     
     struct _funcdeclaration
@@ -3674,13 +3706,15 @@ namespace server
         _funcs.add(new _funcdeclaration("wall", PRIV_MASTER, _wall));
         _funcs.add(new _funcdeclaration("man", 0, _man));
         _funcs.add(new _funcdeclaration("help", 0, _man));
-        _funcs.add(new _funcdeclaration("info", 0, _man));
+        _funcs.add(new _funcdeclaration("info", 0, _info));
+        _funcs.add(new _funcdeclaration("version", 0, _info));
         _funcs.add(new _funcdeclaration("pm", 0, _pm));
         _funcs.add(new _funcdeclaration("exec", PRIV_ADMIN, _exec));
         _funcs.add(new _funcdeclaration("stats", 0, _stats));
         _funcs.add(new _funcdeclaration("set", 0, _set));
         _funcs.add(new _funcdeclaration("vars", PRIV_ADMIN, _showvars));
         _funcs.add(new _funcdeclaration("load", PRIV_ADMIN, _load));
+        _funcs.add(new _funcdeclaration("getip", PRIV_MASTER, _getip));
     }
     
     void _privfail(clientinfo *ci)
