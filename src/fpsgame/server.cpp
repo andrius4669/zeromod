@@ -750,6 +750,7 @@ namespace server
 
     const char *privname(int type)
     {
+        static char buf[32];    //static buffer for unknown[i]
         switch(type)
         {
             case PRIV_ADMIN: return "\fs\f6admin\fr";
@@ -757,7 +758,9 @@ namespace server
             case PRIV_MASTER: return "\fs\f0master\fr";
             case PRIV_ROOT: return "\fs\f1root\fr";
             case PRIV_NONE: return "none";
-            default: return "\fs\f4unknown\fr";
+            default:
+                formatstring(buf)("\fs\f4unknown\f1[\f5%i\f1]\fr", type);
+                return (const char *)buf;
         }
     }
 
@@ -1426,7 +1429,7 @@ namespace server
             if(authdesc && authdesc[0]) formatstring(msg)("%s claimed %s as '\fs\f5%s\fr' [\fs\f0%s\fr]", colorname(ci), name, authname, authdesc);
             else formatstring(msg)("%s claimed %s as '\fs\f5%s\fr'", colorname(ci), name, authname);
         } 
-        else formatstring(msg)("%s %sed %s", colorname(ci), val ? "claim" : "relinquish", name);
+        else formatstring(msg)("%s %s %s", colorname(ci), val ? "claimed" : "relinquished", name);
         packetbuf p(MAXTRANS, ENET_PACKET_FLAG_RELIABLE);
         putint(p, N_SERVMSG);
         sendstring(msg, p);
@@ -3253,11 +3256,16 @@ namespace server
 		string msg;
 		const char *command_args;
 		const char *command_help;
+        bool usage = false;
+        
 		if(!args || !*args) {
             string msg;
             
-            formatstring(msg)("\fs\f1[MAN] Possible commands:\n\f0");
-            strcat(msg, "stats, pm, man, help, info, version");
+            formatstring(msg)("\fs\f1[MAN] Possible commands:\n\f7");
+            strcat(msg, "stats, pm, help, usage, info, version");
+            if(_getpriv(ci)>=PRIV_MASTER) {
+                strcat(msg, "\n\f1getip, givepriv, setmaster");
+            }
             if(_getpriv(ci)>=PRIV_ADMIN) {
                 strcat(msg, "\n\f3exec, load, set, showvars");
             }
@@ -3265,6 +3273,9 @@ namespace server
             strcat(msg, "\fr");
             goto _sendf;
         }
+        
+        if(cmd && *cmd && !strcmp(cmd, "usage")) usage = true;
+        
 		if(!strcmp(args, "wall")) {
 			command_args = "<message>";
 			command_help = "prints a message on the wall";
@@ -3286,14 +3297,23 @@ namespace server
 		} else if(!strcmp(args, "exec")) {
 			command_args = "<cubescript-code>";
 			command_help = "executes a cubescript code";
-		} else if(!strcmp(args, "man") || !strcmp(args, "help") || !strcmp(args, "info")) {
+        } else if(!strcmp(args, "info") || !strcmp(args, "version")) {
+            command_args = 0;
+            command_help = "shows server information";
+        } else if(!strcmp(args, "setpriv")) {
+            command_args = "<cn> <privilege>";
+            command_help = "Gives privilege for user (privilege can be number or string, like master)";
+		} else if(!strcmp(args, "man") || !strcmp(args, "help")) {
 			command_args = "[command]";
 			command_help = "gives a manual for the asked command or lists avaiable commands";
 		} else {    //TODO: add modules hook "man" and implement reading from files
-            formatstring(msg)("\fs\f1[MAN]\fr Man-page for module \"%s\" not found.", args);
+            formatstring(msg)("\fs\f1[HELP]\fr Man-page for module \"%s\" not found.", args);
             goto _sendf;
         }
-		formatstring(msg)("\fs\f1[MAN:USAGE]\fr %s %s\n\fs\f1[MAN:DESCRIPTION]\fr %s", args, command_args, command_help);
+		
+		if(usage) formatstring(msg)("\fs\f1[HELP:USAGE] \f7%s %s\fr", args, command_args);
+		else if(!command_args || !*command_args) formatstring(msg)("\fs\f1[HELP:DESCRIPTION]\f7 %s\fr", command_help);
+        else formatstring(msg)("\fs\f1[HELP:USAGE] \f7%s %s\n\f1[HELP:DESCRIPTION]\f7 %s\fr", args, command_args, command_help);
         
         _sendf:
             sendf(ci?ci->clientnum:-1, 1, "ris" , N_SERVMSG, msg);
@@ -3420,19 +3440,25 @@ namespace server
     
     int _exechook_s(char *name, void *param)
     {
+        bool found=false;
+        int ret;
+        
         if(!name || !*name) return -1;  //<0==fail
         for(int i = 0; i < _hookfuncs.length(); i++)
         {
             if(_hookfuncs[i] && !strcmp(_hookfuncs[i]->name, name))
             {
+                found = true;
                 _hp.args[0] = param;
+                ret = 0;
                 for(int j = 0; j < _hookfuncs[i]->funcs.length(); j++)
                 {
-                    _hookfuncs[i]->funcs[j].func(&_hp);
+                    ret = _hookfuncs[i]->funcs[j].func(&_hp);
                 }
                 break;
             }
         }
+        return found?ret:-1;
     }
     
     void _setext(char *s, void *ptr)
@@ -3526,7 +3552,11 @@ namespace server
         int cnc;
         char buf[MAXTRANS];
         
-        if(!args || !*args) return;
+        if(!args || !*args)
+        {
+            _man("usage", cmd, ci);
+            return;
+        }
         
         strcpy(buf, args);
         
@@ -3558,6 +3588,85 @@ namespace server
                 sendf(j, 1, "ris", N_SERVMSG, msg);
                 break;
             }
+        }
+    }
+    
+    void _setpriv(const char *cmd, const char *args, clientinfo *ci)
+    {
+        string buf;
+        char *argv[2];
+        int cn, cx, privilege;
+        
+        if(!args || !*args)
+        {
+            _man("usage", cmd, ci);
+            return;
+        }
+        
+        strcpy(buf, args);
+        _argsep(buf, 2, argv);
+        
+        if(!strcmp(cmd, "setpriv"))
+        {
+            if(!*argv[0] || !argv[1] || !*argv[1])
+            {
+                _man("usage", cmd, ci);
+                return;
+            }
+            
+            cn = atoi(argv[0]);
+            if(!cn && strcmp(argv[0], "0"))
+            {
+                _man("usage", cmd, ci);
+                return;
+            }
+            
+            privilege = atoi(argv[1]);
+            if(!privilege && strcmp(argv[1], "0"))
+            {
+                if(!strcmp(argv[1], "none")) privilege = PRIV_NONE;
+                else if(!strcmp(argv[1], "master")) privilege = PRIV_MASTER;
+                else if(!strcmp(argv[1], "auth")) privilege = PRIV_AUTH;
+                else if(!strcmp(argv[1], "admin")) privilege = PRIV_ADMIN;
+                else if(!strcmp(argv[1], "root")) privilege = PRIV_ROOT;
+                else
+                {
+                    man("usage", cmd, ci);
+                    return;
+                }
+            }
+        }
+        else
+        {
+            _notify("DEBUG", "This function isn't implemented yet", _N_OWNER, ci);
+            return;
+        }
+        
+        cx = getinfo(cn);
+        if(!cx)
+        {
+            _notify("FAIL", "Unknown cn", _N_OWNER, ci, 2);
+            return;
+        }
+        
+        if(_getpriv(ci)>=PRIV_ROOT || (((_getpriv(ci)>_getpriv(cx)) || (ci == cx)) && (privilege>=0) && (_getpriv(ci)>=privilege)))
+        {
+            defformatstring(msg)("%s %s %s", colorname(cx), privilege?"claimed":"relinquished", privname(privilege?privilege:cx->privilege));
+            cx->privilege = privilege;
+
+            packetbuf p(MAXTRANS, ENET_PACKET_FLAG_RELIABLE);
+            putint(p, N_SERVMSG);
+            sendstring(msg, p);
+            putint(p, N_CURRENTMASTER);
+            putint(p, mastermode);
+            loopv(clients) if(clients[i]->privilege >= PRIV_MASTER)
+            {
+                putint(p, clients[i]->clientnum);
+                putint(p, clients[i]->privilege);
+            }
+            putint(p, -1);
+            sendpacket(-1, 1, p.finalize());
+            checkpausegame();
         }
     }
     
@@ -3715,6 +3824,7 @@ namespace server
         _funcs.add(new _funcdeclaration("vars", PRIV_ADMIN, _showvars));
         _funcs.add(new _funcdeclaration("load", PRIV_ADMIN, _load));
         _funcs.add(new _funcdeclaration("getip", PRIV_MASTER, _getip));
+        _funcs.add(new _funcdeclaration("setpriv", PRIV_MASTER, _setpriv));
     }
     
     void _privfail(clientinfo *ci)
