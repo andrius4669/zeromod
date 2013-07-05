@@ -1385,7 +1385,7 @@ namespace server
             {
                 if(wantpriv <= ci->privilege) return true;
             }
-            else if(wantpriv <= PRIV_MASTER && !force)
+            else if(wantpriv <= PRIV_MASTER && !force && !authname)
             {
                 if(ci->state.state==CS_SPECTATOR) 
                 {
@@ -3679,7 +3679,7 @@ namespace server
         _funcs.add(new _funcdeclaration("exec", PRIV_ADMIN, _exec));
         _funcs.add(new _funcdeclaration("stats", 0, _stats));
         _funcs.add(new _funcdeclaration("set", 0, _set));
-        _funcs.add(new _funcdeclaration("vars", PRIV_ADMIN, _showvars));     //TODO: remove then not testing
+        _funcs.add(new _funcdeclaration("vars", PRIV_ADMIN, _showvars));
         _funcs.add(new _funcdeclaration("load", PRIV_ADMIN, _load));
     }
     
