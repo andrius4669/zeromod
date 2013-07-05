@@ -752,10 +752,12 @@ namespace server
     {
         switch(type)
         {
-            case PRIV_ADMIN: return "admin";
-            case PRIV_AUTH: return "auth";
-            case PRIV_MASTER: return "master";
-            default: return "unknown";
+            case PRIV_ADMIN: return "\fs\f6admin\fr";
+            case PRIV_AUTH: return "\fs\f0auth\fr";
+            case PRIV_MASTER: return "\fs\f0master\fr";
+            case PRIV_ROOT: return "\fs\f1root\fr";
+            case PRIV_NONE: return "none";
+            default: return "\fs\f4unknown\fr";
         }
     }
 
@@ -1332,7 +1334,10 @@ namespace server
         u.pubkey = parsepubkey(pubkey);
         switch(priv[0])
         {
+            case 'c': case 'C': u.privilege = PRIV_MASTER; break;
+            case 'r': case 'R': u.privilege = PRIV_ROOT; break;
             case 'a': case 'A': u.privilege = PRIV_ADMIN; break;
+            case 'n': case 'N': u.privilege = PRIV_NONE; break;
             case 'm': case 'M': default: u.privilege = PRIV_AUTH; break;
         }
     }
@@ -1422,7 +1427,7 @@ namespace server
             if(authdesc && authdesc[0]) formatstring(msg)("%s claimed %s as '\fs\f5%s\fr' [\fs\f0%s\fr]", colorname(ci), name, authname, authdesc);
             else formatstring(msg)("%s claimed %s as '\fs\f5%s\fr'", colorname(ci), name, authname);
         } 
-        else formatstring(msg)("%s %s %s", colorname(ci), val ? "claimed" : "relinquished", name);
+        else formatstring(msg)("%s %sed %s", colorname(ci), val ? "claim" : "relinquish", name);
         packetbuf p(MAXTRANS, ENET_PACKET_FLAG_RELIABLE);
         putint(p, N_SERVMSG);
         sendstring(msg, p);
