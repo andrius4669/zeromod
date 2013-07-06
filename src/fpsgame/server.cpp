@@ -3787,7 +3787,7 @@ namespace server
     {
         string msg;
         formatstring(msg)("\fs\f5[INFO] \f0zeromod server mod\n\f5[INFO] \f0Contributors: /dev/zero, haytham\fr");
-        sendf(ci?ci->clientnum:-1, 1, "ris", msg);
+        sendf(ci?ci->clientnum:-1, 1, "ris", N_SERVMSG, msg);
     }
     
 //  >>> Server internals
