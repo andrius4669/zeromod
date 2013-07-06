@@ -3650,7 +3650,7 @@ namespace server
             return;
         }
         
-        if(_getpriv(ci)>=PRIV_ROOT || (((_getpriv(ci)>_getpriv(cx)) || (ci == cx)) && (privilege>=0) && (_getpriv(ci)>=privilege)))
+        if(_getpriv(ci)>=PRIV_ROOT || (((_getpriv(ci)>_getpriv(cx)) || ((ci == cx) && (privilege<ci.privilege))) && (privilege>=0) && (_getpriv(ci)>=privilege)))
         {
             defformatstring(msg)("%s %s %s", colorname(cx), privilege?"claimed":"relinquished", privname(privilege?privilege:cx->privilege));
             cx->privilege = privilege;
