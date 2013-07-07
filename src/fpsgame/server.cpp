@@ -3699,6 +3699,7 @@ namespace server
                 if(*s == *p)
                 {
                     _notify("\f3[FAIL] Invalid module name", ci);
+                    return;
                 }
             }
         }
