@@ -1989,7 +1989,7 @@ namespace server
             if(m_mp(gamemode) && ci->state.state!=CS_SPECTATOR) sendspawn(ci);
         }
 
-        if(_getivars("noclearbots")) loopv(bots) if(bots[i]->aireinit<1) bots[i]->aireinit = 1;
+        if(_getivars("noclearbots")) loopv(bots) if(bots[i] && bots[i]->aireinit<1) bots[i]->aireinit = 1;
         aiman::changemap();
 
         if(m_demo)
