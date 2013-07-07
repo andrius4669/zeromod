@@ -839,6 +839,10 @@ namespace server
     extern int msgsizelookup(int msg);
     extern bool serveroption(const char *arg);
     extern bool delayspawn(int type);
+    
+    //zeromod functions
+    extern bool _readsnvars(const char *name, char *out, size_t s);
+    extern int _getivars(const char *name);
 }
 
 #endif

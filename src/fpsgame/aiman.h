@@ -116,7 +116,7 @@ namespace aiman
         ci->state.skill = skill <= 0 ? rnd(50) + 51 : clamp(skill, 1, 101);
 	    clients.add(ci);
 		ci->state.lasttimeplayed = lastmillis;
-		copystring(ci->name, "bot", MAXNAMELEN+1);
+		if(!_readsnvars("botname", ci->name, MAXNAMELEN+1)) copystring(ci->name, "bot", MAXNAMELEN+1);
 		ci->state.state = CS_DEAD;
         copystring(ci->team, team, MAXTEAMLEN+1);
         ci->playermodel = rnd(128);
@@ -176,7 +176,6 @@ namespace aiman
 
 	void removeai(clientinfo *ci)
 	{ // either schedules a removal, or someone else to assign to
-
 		loopvrev(ci->bots) shiftai(ci->bots[i], findaiclient(ci));
 	}
 
@@ -254,7 +253,6 @@ namespace aiman
         defformatstring(msg)("bot team balancing is now %s", botbalance ? "enabled" : "disabled");
         sendservmsg(msg);
     }
-
 
     void changemap()
     {
