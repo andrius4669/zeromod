@@ -3494,7 +3494,7 @@ namespace server
                 _notify(msg, ci);
                 return;
             }
-            _editmute(ci, val);
+            _editmute(cx, val);
         }
     }
     
@@ -3526,7 +3526,7 @@ namespace server
                 _notify(msg, ci);
                 return;
             }
-            _mute(ci, val);
+            _mute(cx, val);
         }
     }
     
