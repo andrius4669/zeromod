@@ -213,13 +213,12 @@ namespace server
     struct _extrainfo
     {
         bool mute;
-        int mutewarn;
         bool editmute;
         int editmutewarn;
         bool forcedspectator;
         bool fakeprivon;
         int fakepriv;
-        bool spymode;
+        bool spy;
     };
     
     struct clientinfo
@@ -627,6 +626,11 @@ namespace server
     VAR(restrictpausegame, 0, 1, 1);
     VAR(restrictgamespeed, 0, 1, 1);
 
+    //zeromod variables
+    VAR(clearbots, 0, 1, 1);
+    VAR(servergamespeed, 10, 100, 1000);
+    VAR(servergamelimit, 1, 10, 1440);  //max is 24 hours
+    
     SVAR(serverdesc, "");
     SVAR(serverpass, "");
     SVAR(adminpass, "");
@@ -808,6 +812,7 @@ namespace server
         loopv(clients) 
         {
             clientinfo *ci = clients[i];
+            if(ci->_xi.spy) continue;
             if(ci->clientnum!=exclude && (!nospec || ci->state.state!=CS_SPECTATOR || (priv && (ci->privilege || ci->local))) && (!noai || ci->state.aitype == AI_NONE)) n++;
         }
         return n;
@@ -1429,7 +1434,7 @@ namespace server
             allowedips.shrink(0);
         }
         string msg;
-        if(val && authname) 
+        if(val && authname)
         {
             if(authdesc && authdesc[0]) formatstring(msg)("%s claimed %s as '\fs\f5%s\fr' [\fs\f0%s\fr]", colorname(ci), name, authname, authdesc);
             else formatstring(msg)("%s claimed %s as '\fs\f5%s\fr'", colorname(ci), name, authname);
@@ -1440,13 +1445,13 @@ namespace server
         sendstring(msg, p);
         putint(p, N_CURRENTMASTER);
         putint(p, mastermode);
-        loopv(clients) if(clients[i]->privilege >= PRIV_MASTER)
+        loopv(clients) if(clients[i]->privilege >= PRIV_MASTER && !clients[i]->_xi.spy)
         {
             putint(p, clients[i]->clientnum);
             putint(p, clients[i]->privilege);
         }
         putint(p, -1);
-        sendpacket(-1, 1, p.finalize());
+        sendpacket(ci->_xi.spy?ci->clientnum:-1, 1, p.finalize());
         checkpausegame();
         return true;
     }
@@ -1770,7 +1775,7 @@ namespace server
         loopv(clients)
         {
             clientinfo *ci = clients[i];
-            if(!ci->connected || ci->clientnum == exclude) continue;
+            if(!ci->connected || ci->clientnum == exclude || ci->_xi.spy) continue;
 
             putinitclient(ci, p);
         }
@@ -1811,7 +1816,7 @@ namespace server
             putint(p, mastermode);
             hasmaster = true;
         }
-        loopv(clients) if(clients[i]->privilege >= PRIV_MASTER)
+        loopv(clients) if(clients[i]->privilege >= PRIV_MASTER && !clients[i]->_xi.spy)
         {
             if(!hasmaster)
             {
@@ -1883,6 +1888,7 @@ namespace server
             {
                 clientinfo *oi = clients[i];
                 if(ci && oi->clientnum==ci->clientnum) continue;
+                if(oi->_xi.spy) continue;
                 putint(p, oi->clientnum);
                 putint(p, oi->state.state);
                 putint(p, oi->state.frags);
@@ -1943,18 +1949,20 @@ namespace server
         }
         notgotitems = false;
     }
-        
+    
+    
+    
     void changemap(const char *s, int mode)
     {
         stopdemo();
         pausegame(false);
-        changegamespeed(100);
+        changegamespeed(servergamespeed);
         if(smode) smode->cleanup();
-        if(!_getivars("noclearbots")) aiman::clearai();
+        if(clearbots) aiman::clearai();
 
         gamemode = mode;
         gamemillis = 0;
-        gamelimit = (m_overtime ? 15 : 10)*60000;
+        gamelimit = (m_overtime ? 15 : servergamelimit)*60000;
         interm = 0;
         nextexceeded = 0;
         copystring(smapname, s);
@@ -1986,10 +1994,10 @@ namespace server
             clientinfo *ci = clients[i];
             ci->mapchange();
             ci->state.lasttimeplayed = lastmillis;
-            if(m_mp(gamemode) && ci->state.state!=CS_SPECTATOR) sendspawn(ci);
+            if(m_mp(gamemode) && ci->state.state!=CS_SPECTATOR && !ci->_xi.spy) sendspawn(ci);
         }
 
-        if(_getivars("noclearbots")) loopv(bots) if(bots[i] && bots[i]->aireinit<1) bots[i]->aireinit = 1;
+        if(!clearbots) loopv(bots) if(bots[i] && bots[i]->aireinit<1) bots[i]->aireinit = 1;
         aiman::changemap();
 
         if(m_demo)
@@ -2814,7 +2822,6 @@ namespace server
     void _init_varpriv()
     {
         _var_priv.add(new _var_sec("botname", PRIV_ADMIN));
-        _var_priv.add(new _var_sec("noclearbots", PRIV_ADMIN));
         _var_priv.add(new _var_sec("mastercountbots", PRIV_ADMIN));
     }
     
@@ -3530,6 +3537,63 @@ namespace server
         }
     }
     
+    void _spy(clientinfo *ci, bool val)
+    {
+        
+        if(!ci || (ci->_xi.spy ? val : !val)) return;
+        ci->_xi.spy = val;
+        if(val)
+        {
+            if(ci->state.state!=CS_SPECTATOR)
+            {
+                if(ci->state.state==CS_ALIVE) suicide(ci);
+                if(smode) smode->leavegame(ci);
+                ci->state.timeplayed += lastmillis - ci->state.lasttimeplayed;
+            }
+            aiman::removeai(ci);
+            sendf(ci->clientnum, 1, "ri3", N_SPECTATOR, ci->clientnum, 1);
+            sendf(-1, 1, "rxi2", ci->clientnum, N_CDIS, ci->clientnum);
+            sendf(ci->clientnum, 1, "ris", N_SERVMSG, "\f1[SPY] \f0You entered spy mode");
+        }
+        else
+        {
+            if(ci->state.state!=CS_SPECTATOR)
+            {
+                ci->state.state = CS_DEAD;
+                ci->state.respawn();
+                ci->state.lasttimeplayed = lastmillis;
+                aiman::addclient(ci);
+                if(ci->clientmap[0] || ci->mapcrc) checkmaps();
+                if(!hasmap(ci)) rotatemap(true);
+            }
+            //sendf(-1, 1, "rxi2ssi", ci->clientnum, N_INITCLIENT, ci->clientnum, ci->name, ci->team, ci->playermodel);
+            sendinitclient(ci);
+            sendresume(ci);
+            sendf(-1, 1, "ri3", N_SPECTATOR, ci->clientnum, ci->state.state==CS_SPECTATOR?1:0);
+            
+            //send out privileges
+            packetbuf p(MAXTRANS, ENET_PACKET_FLAG_RELIABLE);
+            putint(p, N_CURRENTMASTER);
+            putint(p, mastermode);
+            loopv(clients) if(clients[i]->privilege >= PRIV_MASTER && !clients[i]->_xi.spy)
+            {
+                putint(p, clients[i]->clientnum);
+                putint(p, clients[i]->privilege);
+            }
+            putint(p, -1);
+            sendpacket(-1, 1, p.finalize());
+            
+            sendf(ci->clientnum, 1, "ris", N_SERVMSG, "\f1[SPY] \f0You left spy mode");
+        }
+    }
+    
+    void _spyfunc(const char *cmd, const char *args, clientinfo *ci)
+    {
+        if(!ci) return;
+        if(!args || !*args) _spy(ci, !ci->_xi.spy);
+        else _spy(ci, atoi(args)!=0);
+    }
+    
     void _set(const char *cmd, const char *args, clientinfo *ci)
     {
         string buf;
@@ -3943,13 +4007,13 @@ namespace server
             sendstring(msg, p);
             putint(p, N_CURRENTMASTER);
             putint(p, mastermode);
-            loopv(clients) if(clients[i]->privilege >= PRIV_MASTER)
+            loopv(clients) if(clients[i]->privilege >= PRIV_MASTER && !clients[i]->_xi.spy)
             {
                 putint(p, clients[i]->clientnum);
                 putint(p, clients[i]->privilege);
             }
             putint(p, -1);
-            sendpacket(-1, 1, p.finalize());
+            sendpacket(cx->_xi.spy?cx->clientnum:-1, 1, p.finalize());
             checkpausegame();
         }
         else _privfail(ci);
@@ -4074,7 +4138,7 @@ namespace server
     
     void _info(const char *cmd, const char *args, clientinfo *ci)
     {
-        defformatstring(msg)("\fs\f5[INFO] \f1zeromod cube2:sauerbraten server mod\n\f5[INFO] \f0Contributors: /dev/zero, ~Haytham\fr");
+        defformatstring(msg)("\fs\f5[INFO] \f1zeromod cube2:sauerbraten server mod (based on original server)\n\f5[INFO] \f0Contributors: /dev/zero, ~Haytham\fr");
         sendf(ci?ci->clientnum:-1, 1, "ris", N_SERVMSG, msg);
     }
     
@@ -4129,7 +4193,7 @@ namespace server
         _funcs.add(new _funcdeclaration("unmute", PRIV_AUTH, _mutefunc));
         _funcs.add(new _funcdeclaration("editmute", PRIV_MASTER, _editmutefunc));
         _funcs.add(new _funcdeclaration("editunmute", PRIV_MASTER, _editmutefunc));
-
+        _funcs.add(new _funcdeclaration("spy", PRIV_ADMIN, _spyfunc));
     }
     
     void _privfail(clientinfo *ci)
@@ -4394,7 +4458,7 @@ namespace server
                 break;
 
             case N_TRYSPAWN:
-                if(!ci || !cq || cq->state.state!=CS_DEAD || cq->state.lastspawn>=0 || (smode && !smode->canspawn(cq))) break;
+                if(!ci || !cq || cq->state.state!=CS_DEAD || ci->_xi.spy || cq->state.lastspawn>=0 || (smode && !smode->canspawn(cq))) break;
                 if(!ci->clientmap[0] && !ci->mapcrc)
                 {
                     ci->mapcrc = -1;
@@ -4422,7 +4486,7 @@ namespace server
             case N_SPAWN:
             {
                 int ls = getint(p), gunselect = getint(p);
-                if(!cq || (cq->state.state!=CS_ALIVE && cq->state.state!=CS_DEAD) || ls!=cq->state.lifesequence || cq->state.lastspawn<0) break;
+                if(!cq || (cq->state.state!=CS_ALIVE && cq->state.state!=CS_DEAD) || ls!=cq->state.lifesequence || cq->state.lastspawn<0 || cq->_xi.spy) break;
                 cq->state.lastspawn = -1;
                 cq->state.state = CS_ALIVE;
                 cq->state.gunselect = gunselect >= GUN_FIST && gunselect <= GUN_PISTOL ? gunselect : GUN_FIST;
@@ -4508,22 +4572,25 @@ namespace server
                 QUEUE_AI;
                 QUEUE_MSG;
                 getstring(text, p);
-
+                if(!ci) break;
                 if(text[0]=='#')
                 {
-                    if(cm) cm->messages.drop();
+                    cm->messages.drop();
                     if(isdedicatedserver()) logoutf("%s: %s", colorname(cq), text);
                     _servcmd(text+1, ci);
                 }
                 else
                 {
-                    if(ci && ci->_xi.mute)
+                    if(ci->_xi.spy)
                     {
-                        if(cm)
-                        {
-                            cm->messages.drop();
-                            sendf(sender, 1, "ris", N_SERVMSG, "\f5[MUTE] \f3You are mutted");
-                        }
+                        cm->messages.drop();
+                        filtertext(text, text);
+                        sendservmsgf("\f3[REMOTE:\f7%s\f3] \f2%s", colorname(ci), text);
+                    }
+                    else if(ci->_xi.mute)
+                    {
+                        cm->messages.drop();
+                        sendf(sender, 1, "ris", N_SERVMSG, "\f5[MUTE] \f3You are mutted");
                     }
                     else
                     {
@@ -4542,6 +4609,11 @@ namespace server
                 if(ci->_xi.mute)
                 {
                     sendf(ci->clientnum, 1, "ris", N_SERVMSG, "\f5[MUTE] \f3You are mutted");
+                    break;
+                }
+                if(ci->_xi.spy)
+                {
+                    sendservmsgf("\f1[REMOTECHAT:\f7%s\f1] \f0%s", colorname(ci), text);
                     break;
                 }
                 loopv(clients)
@@ -4580,7 +4652,8 @@ namespace server
                     if(ci->state.state==CS_ALIVE) suicide(ci);
                     copystring(ci->team, text);
                     aiman::changeteam(ci);
-                    sendf(-1, 1, "riisi", N_SETTEAM, sender, ci->team, ci->state.state==CS_SPECTATOR ? -1 : 0);
+                    if(!ci->_xi.spy) sendf(-1, 1, "riisi", N_SETTEAM, sender, ci->team, ci->state.state==CS_SPECTATOR ? -1 : 0);
+                    else sendf(sender, 1, "riisi", N_SETTEAM, sender, ci->team, -1);
                 }
                 break;
             }
@@ -4766,6 +4839,7 @@ namespace server
             {
                 int spectator = getint(p), val = getint(p);
                 if(!ci->privilege && !ci->local && (spectator!=sender || (ci->state.state==CS_SPECTATOR && (mastermode>=MM_LOCKED || ci->_xi.forcedspectator)))) break;
+                if(ci->_xi.spy) break;
                 clientinfo *spinfo = (clientinfo *)getclientinfo(spectator); // no bots
                 if(!spinfo || (spinfo->state.state==CS_SPECTATOR ? val : !val)) break;
 

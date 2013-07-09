@@ -65,7 +65,7 @@ namespace aiman
 
     static inline bool validaiclient(clientinfo *ci)
     {
-        return ci->clientnum >= 0 && ci->state.aitype == AI_NONE && (ci->state.state!=CS_SPECTATOR || ci->local || ci->privilege);
+        return ci->clientnum >= 0 && ci->state.aitype == AI_NONE && (ci->state.state!=CS_SPECTATOR || ci->local || ci->privilege) && !ci->_xi.spy;
     }
 
 	clientinfo *findaiclient(clientinfo *exclude = NULL)
@@ -122,6 +122,7 @@ namespace aiman
         ci->playermodel = rnd(128);
 		ci->aireinit = 2;
 		ci->connected = true;
+        memset(&ci->_xi, 0, sizeof(_extrainfo));
         dorefresh = true;
 		return true;
 	}
