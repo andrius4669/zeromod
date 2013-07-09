@@ -1967,10 +1967,10 @@ namespace server
         nextexceeded = 0;
         copystring(smapname, s);
         loaditems();
-        scores.shrink(0);
+        scores.setsize(0);
         shouldcheckteamkills = false;
-        teamkills.shrink(0);
-        loopv(clients)
+        teamkills.setsize(0);
+        loopv(clients) if(clients[i])
         {
             clientinfo *ci = clients[i];
             ci->state.timeplayed += lastmillis - ci->state.lasttimeplayed;
@@ -1989,7 +1989,7 @@ namespace server
         else smode = NULL;
 
         if(m_timed && smapname[0]) sendf(-1, 1, "ri2", N_TIMEUP, gamemillis < gamelimit && !interm ? max((gamelimit - gamemillis)/1000, 1) : 0);
-        loopv(clients)
+        loopv(clients) if(clients[i])
         {
             clientinfo *ci = clients[i];
             ci->mapchange();
