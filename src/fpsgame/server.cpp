@@ -1981,7 +1981,7 @@ namespace server
 
         gamemode = mode;
         gamemillis = 0;
-        gamelimit = (m_overtime ? servergamelimit*1.5f : servergamelimit)*60000.0f;
+        gamelimit = int((m_overtime ? servergamelimit*1.5f : servergamelimit)*60000.0f);
         interm = 0;
         nextexceeded = 0;
         copystring(smapname, s);
