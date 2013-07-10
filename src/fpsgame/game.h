@@ -94,10 +94,10 @@ enum
 };
 
 // zeromod variables
-#define _overtimectf 1
-#define _overtimeprotect 1
-#define _overtimehold 1
-#define _overtimecollect 1
+#define _overtimectf true
+#define _overtimeprotect true
+#define _overtimehold true
+#define _overtimecollect true
 
 static struct gamemodeinfo
 {
