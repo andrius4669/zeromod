@@ -629,7 +629,8 @@ namespace server
     //zeromod variables
     VAR(clearbots, 0, 1, 1);
     VAR(servergamespeed, 10, 100, 1000);
-    FVAR(servergamelimit, 1.0f, 10.0f, 1440.0f);  //max is 24 hours
+    FVAR(servergamelimit, 1.0, 10.0, 1440.0);  //max is 24 hours
+    VAR(serverovertime, 0, 0, 1);
     
     SVAR(serverdesc, "");
     SVAR(serverpass, "");
@@ -1962,7 +1963,7 @@ namespace server
 
         gamemode = mode;
         gamemillis = 0;
-        gamelimit = int((m_overtime ? servergamelimit*1.5f : servergamelimit)*60000.0f);
+        gamelimit = int(((serverovertime && m_overtime) ? servergamelimit*1.5 : servergamelimit)*60000);
         interm = 0;
         nextexceeded = 0;
         copystring(smapname, s);
