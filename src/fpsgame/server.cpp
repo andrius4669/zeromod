@@ -643,7 +643,26 @@ namespace server
 		}
 	});
     SVAR(servermotd, "");
+    
+    // zeromod variables in game.h
 
+    void _overtime_ctf(bool _overtime_) {
+        #define _overtimectf _overtime_ == true ? 1 : 0;
+    }
+    void _overtime_protect(bool _overtime_) {
+        #define _overtimeprotect _overtime_ == true ? 1 : 0;
+    }
+    void _overtime_hold(bool _overtime_) {
+        #define _overtimehold _overtime_ == true ? 1 : 0;
+    }
+    void _overtime_collect(bool _overtime_) {
+        #define _overtimecollect _overtime_ == true ? 1 : 0;
+    }
+    ICOMMAND(overtimectf, "b", (bool _overtime_), _overtime_ctf(_overtime_));
+    ICOMMAND(overtimeprotect, "b", (bool _overtime_), _overtime_protect(_overtime_));
+    ICOMMAND(overtimehold, "b", (bool _overtime_), _overtime_hold(_overtime_));
+    ICOMMAND(overtimecollect, "b", (bool _overtime_), _overtime_collect(_overtime_));
+    
     struct teamkillkick
     {
         int modes, limit, ban;
