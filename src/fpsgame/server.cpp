@@ -20,6 +20,15 @@ extern ENetAddress masteraddress;
 
 namespace server
 {
+    struct _hookparam
+    {
+        void *args[8];
+    } __attribute__((packed));
+    
+    _hookparam _hp;
+    
+    int _exechook(const char *name);
+    
     struct server_entity            // server side version of "entity" type
     {
         int type;
@@ -2784,7 +2793,11 @@ namespace server
         aiman::addclient(ci);
 
         if(m_demo) setupdemoplayback();
-
+        
+        _hp.args[0] = (void *)getclientip(ci->clientnum);
+        _hp.args[1] = (void *)colorname(ci);
+        _exechook("connected");
+        
         if(servermotd[0]) sendf(ci->clientnum, 1, "ris", N_SERVMSG, servermotd);
     }
 
@@ -3240,6 +3253,12 @@ namespace server
         {
             sendf(clients[i]->clientnum, 1, "ris", N_SERVMSG, msg);
         }
+    }
+    
+    void _notifypriv(const char *msg, int min, int max)
+    {
+        loopv(clients) if(clients[i] && (clients[i]->privilege>=min) && (clients[i]->privilege<=max))
+            sendf(clients[i]->clientnum, 1, "ris", N_SERVMSG, msg);
     }
     
     int _argsep(char *str, int c, char *argv[], char sep = ' ') //separate args (str = source string; c = expected argc; argv = ptrs array; ret = argc)
@@ -3768,29 +3787,22 @@ namespace server
     
     vector<_pluginfunc *> _plfuncs; //plugin functions - intermodule communication
     
-    struct _hookparam
-    {
-        void *args[8];
-    } __attribute__((packed));
-    
     struct _hookfunc
     {
         int (*func)(_hookparam *);
-        int priority;
+//      int priority;
     };
     
     struct _hookstruct
     {
         char name[16];
-        int num;
+//      int num;
         vector<_hookfunc> funcs;
     };
     
     vector<_hookstruct *> _hookfuncs;
     
-    _hookparam _hp;
-    
-    int _exechook_s(char *name, void *param)
+    int _exechook(const char *name)
     {
         bool found=false;
         int ret;
@@ -3801,7 +3813,6 @@ namespace server
             if(_hookfuncs[i] && !strcmp(_hookfuncs[i]->name, name))
             {
                 found = true;
-                _hp.args[0] = param;
                 ret = 0;    //==0 - continue, ==1 - dont continue, ==-1 - error (dont continue)
                 for(int j = 0; j < _hookfuncs[i]->funcs.length(); j++)
                 {
@@ -3812,6 +3823,32 @@ namespace server
             }
         }
         return found?ret:-1;
+    }
+    
+    void _addhook(const char *name, int (*hookfunc)(_hookparam *))
+    {
+        _hookstruct *hs = 0;
+        loopv(_hookfuncs) if(_hookfuncs[i] && !strcmp(_hookfuncs[i]->name, name))
+        {
+            hs = _hookfuncs[i];
+            break;
+        }
+        if(!hs)
+        {
+            hs = new _hookstruct;
+            if(!hs) return;
+            strncpy(hs->name, name, 16);
+            hs->funcs.add();
+            hs->funcs[0].func = hookfunc;
+            _hookfuncs.add(hs);
+        }
+        else
+        {
+            loopv(hs->funcs) if(hs->funcs[i].func == hookfunc) return;
+            _hookfunc hf;
+            hf.func = hookfunc;
+            hs->funcs.add(hf);
+        }
     }
     
     void _setext(char *s, void *ptr)
@@ -3844,6 +3881,9 @@ namespace server
     void * _getext(char *s)
     {
         if(!strcmp(s, "test")) return (void *)_testfunc;
+        else if(!strcmp(s, "addhook")) return (void *)_addhook;
+        else if(!strcmp(s, "sendf")) return (void *)sendf;
+        else if(!strcmp(s, "notifypriv")) return (void *)_notifypriv;
         else
         {
             for(int i = 0; i < _plfuncs.length(); i++)
@@ -3949,7 +3989,7 @@ namespace server
         
         if(needload)
         {
-            m->h = Z_OPENLIB(argv[0]);
+            m->h = Z_OPENLIB(fname);
             if(!m->h)
             {
                 defformatstring(msg)("\f3[WARN] Plugin \f0%s \f3loading failed \f2(%s)", argv[0], dlerror());
