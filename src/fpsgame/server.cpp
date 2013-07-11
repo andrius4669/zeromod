@@ -4341,13 +4341,13 @@ namespace server
         _funcs.add(new _funcdeclaration("info", 0, _info));
         _funcs.add(new _funcdeclaration("version", 0, _info));
         _funcs.add(new _funcdeclaration("pm", 0, _pm));
-        _funcs.add(new _funcdeclaration("exec", PRIV_ADMIN, _exec));
+        _funcs.add(new _funcdeclaration("exec", PRIV_ROOT, _exec));
         _funcs.add(new _funcdeclaration("stats", 0, _stats));
         _funcs.add(new _funcdeclaration("set", 0, _set));
         _funcs.add(new _funcdeclaration("vars", PRIV_ADMIN, _showvars));
-        _funcs.add(new _funcdeclaration("load", PRIV_ADMIN, _load));
-        _funcs.add(new _funcdeclaration("reload", PRIV_ADMIN, _load));
-        _funcs.add(new _funcdeclaration("unload", PRIV_ADMIN, _load));
+        _funcs.add(new _funcdeclaration("load", PRIV_ROOT, _load));
+        _funcs.add(new _funcdeclaration("reload", PRIV_ROOT, _load));
+        _funcs.add(new _funcdeclaration("unload", PRIV_ROOT, _load));
         _funcs.add(new _funcdeclaration("getip", PRIV_ADMIN, _getip));
         _funcs.add(new _funcdeclaration("setpriv", PRIV_MASTER, _setpriv));
         _funcs.add(new _funcdeclaration("priv", PRIV_MASTER, _setpriv));
