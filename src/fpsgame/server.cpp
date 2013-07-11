@@ -2837,7 +2837,7 @@ namespace server
         
         _funcdeclaration(const char *_name, int _priv, void (*_func)(const char *cmd, const char *args, clientinfo *ci))
         {
-            strcpy(name, _name);
+            copystring(name, _name);
             priv = _priv;
             func = _func;
         }
@@ -3077,7 +3077,7 @@ namespace server
                 delete vs;
                 return 0;
             }
-            strcpy(vs->name, name);
+            strncpy(vs->name, name, l);
             vs->id = id;
             vs->type = _VAR_NONE;   //none type: means that veriable is new and not existed before
         }
@@ -3178,7 +3178,7 @@ namespace server
                         {
                             vs->v.s = new char [l];
                             if(!vs->v.s) return false;
-                            strcpy(vs->v.s, v);
+                            strncpy(vs->v.s, v, l);
                             vs->type = _VAR_STRING;
                         }
                         else
@@ -3199,7 +3199,7 @@ namespace server
                     {
                         vs->v.s = new char [l];
                         if(!vs->v.s) return false;
-                        strcpy(vs->v.s, v);
+                        strncpy(vs->v.s, v, l);
                         vs->type = _VAR_STRING;
                     }
                     else vs->v.f = f;
@@ -3212,7 +3212,7 @@ namespace server
                 {
                     vs->v.s = new char [l];
                     if(!vs->v.s) return false;
-                    strcpy(vs->v.s, v);
+                    strncpy(vs->v.s, v, l);
                     vs->type = _VAR_STRING;
                     break;
                 }
@@ -3228,7 +3228,7 @@ namespace server
                 {
                     vs->v.s = new char [l];
                     if(!vs->v.s) return false;
-                    strcpy(vs->v.s, v);
+                    strncpy(vs->v.s, v, l);
                     vs->type = _VAR_STRING;
                 }
                 else
@@ -3389,7 +3389,7 @@ namespace server
         
         if(!args || !*args)
         {           
-            strcpy(msg, "\f0[HELP] \f1Possible commands:\n");
+            copystring(msg, "\f0[HELP] \f1Possible commands:\n", MAXTRANS);
             for(int priv = 0; priv<=_getpriv(ci); priv++)
             {
                 first  = true;
@@ -3400,19 +3400,19 @@ namespace server
                         first = false;
                         switch(priv)
                         {
-                            case PRIV_NONE: strcat(msg, "\f7"); break;
-                            case PRIV_MASTER: case PRIV_AUTH: strcat(msg, "\f0"); break;
-                            case PRIV_ADMIN: strcat(msg, "\f2"); break;
-                            default: strcat(msg, "\f1"); break;
+                            case PRIV_NONE: concatstring(msg, "\f7", MAXTRANS); break;
+                            case PRIV_MASTER: case PRIV_AUTH: concatstring(msg, "\f0", MAXTRANS); break;
+                            case PRIV_ADMIN: concatstring(msg, "\f3", MAXTRANS); break;
+                            default: concatstring(msg, "\f1", MAXTRANS); break;
                         }
                     }
                     else
                     {
-                        strcat(msg, ", ");
+                        concatstring(msg, ", ", MAXTRANS);
                     }
-                    strcat(msg, _funcs[i]->name);
+                    concatstring(msg, _funcs[i]->name, MAXTRANS);
                 }
-                if(!first && priv<_getpriv(ci)) strcat(msg, "\n");
+                if(!first && priv<_getpriv(ci)) concatstring(msg, "\n");
             }
             
             goto _sendf;
@@ -3431,7 +3431,7 @@ namespace server
                 char *names[16];
                 int c;
                 
-                strcpy(name, _manpages[i]->name);
+                copystring(name, _manpages[i]->name, 256);
                 c = _argsep(name, 16, names);
                 for(int j = 0; j < c; j++)
                 {
@@ -3745,7 +3745,7 @@ namespace server
         
         if(!args) return;
         
-        strcpy(buf, args);
+        copystring(buf, args);
         
         _argsep(buf, 2, argv);
         if(!argv[0] || !argv[1]) return;
@@ -3916,7 +3916,7 @@ namespace server
         
         needload = (!cmd || !*cmd || !strcmp(cmd, "load") || !strcmp(cmd, "reload"));
         
-        strcpy(buf, args);
+        copystring(buf, args, MAXTRANS);
         
         _argsep(buf, 2, argv);
         
@@ -4039,7 +4039,7 @@ namespace server
             return;
         }
         
-        strcpy(buf, args);
+        copystring(buf, args, MAXTRANS);
         
         _argsep(buf, 2, argv);
         
@@ -4085,7 +4085,7 @@ namespace server
             return;
         }
         
-        strcpy(buf, args);
+        copystring(buf, args, MAXTRANS);
         _argsep(buf, 2, argv);
         
         if(!cmd || !*cmd || !strcmp(cmd, "setpriv") || !strcmp(cmd, "givepriv") || !strcmp(cmd, "priv"))
@@ -4189,7 +4189,8 @@ namespace server
             return;
         }
         
-        if(_getpriv(ci)>=PRIV_ROOT || ((_getpriv(ci)>_getpriv(cx)) && (privilege>=0) && (_getpriv(ci)>=privilege)))
+        if(_getpriv(ci)>=PRIV_ROOT ||
+            ((_getpriv(ci)>_getpriv(cx) || cx==ci) && (privilege>=0) && (cx->privilege!=privilege) && (_getpriv(ci)>=privilege)))
         {
             defformatstring(msg)("%s %s %s", colorname(cx), privilege?"claimed":"relinquished", privname(privilege?privilege:cx->privilege));
             cx->privilege = privilege;
@@ -4221,9 +4222,9 @@ namespace server
         vector<clientinfo *> cns;
         char *argv[16];
         int cnc;
-        char buf[MAXTRANS];
+        string buf;
         
-        if(args) strcpy(buf, args);
+        if(args) copystring(buf, args);
         else buf[0]=0;
             
         if(args && strchr(args,',')) cnc = _argsep(buf, 16, argv, ',');
@@ -4395,7 +4396,7 @@ namespace server
         
         if(!_funcs.length()) _initfuncs();
         
-        strcpy(str, cmd);
+        strncpy(str, cmd, MAXTRANS);
         _argsep(str, 2, argv);
         
         loopv(_funcs)
