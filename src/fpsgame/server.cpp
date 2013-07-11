@@ -4085,7 +4085,7 @@ namespace server
             return;
         }
         
-        copystring(buf, args, MAXTRANS);
+        copystring(buf, args);
         _argsep(buf, 2, argv);
         
         if(!cmd || !*cmd || !strcmp(cmd, "setpriv") || !strcmp(cmd, "givepriv") || !strcmp(cmd, "priv"))
