@@ -1386,6 +1386,18 @@ namespace server
 
     extern void connected(clientinfo *ci);
 
+    void _putmaster(packetbuf &p)
+    {
+        putint(p, N_CURRENTMASTER);
+        putint(p, mastermode);
+        loopv(clients) if(clients[i] && clients[i]->privilege >= PRIV_MASTER && !clients[i]->_xi.spy)
+        {
+            putint(p, clients[i]->clientnum);
+            putint(p, clients[i]->privilege);
+        }
+        putint(p, -1);
+    }
+    
     bool setmaster(clientinfo *ci, bool val, const char *pass = "", const char *authname = NULL, const char *authdesc = NULL, int authpriv = PRIV_MASTER, bool force = false, bool trial = false)
     {
         if(authname && !val) return false;
@@ -1444,14 +1456,7 @@ namespace server
         packetbuf p(MAXTRANS, ENET_PACKET_FLAG_RELIABLE);
         putint(p, N_SERVMSG);
         sendstring(msg, p);
-        putint(p, N_CURRENTMASTER);
-        putint(p, mastermode);
-        loopv(clients) if(clients[i]->privilege >= PRIV_MASTER && !clients[i]->_xi.spy)
-        {
-            putint(p, clients[i]->clientnum);
-            putint(p, clients[i]->privilege);
-        }
-        putint(p, -1);
+        _putmaster(p);
         sendpacket(ci->_xi.spy?ci->clientnum:-1, 1, p.finalize());
         checkpausegame();
         return true;
@@ -2812,6 +2817,22 @@ namespace server
         _V_VERBOSE
     };
     
+    struct _funcdeclaration
+    {
+        string name;    //function name
+        int priv;       //privilege required to call function
+        
+        _funcdeclaration(const char *_name, int _priv, void (*_func)(const char *cmd, const char *args, clientinfo *ci))
+        {
+            strcpy(name, _name);
+            priv = _priv;
+            func = _func;
+        }
+        
+        void (*func)(const char *cmd, const char *args, clientinfo *ci);
+    };
+    vector<_funcdeclaration *> _funcs;
+    
     struct _var_sec
     {
         _var_sec() {}
@@ -3251,10 +3272,33 @@ namespace server
         if(!args || !*args) return;
         sendf(-1, 1, "ris", N_SERVMSG, args);
     }
-    bool _readmanfile(const char *cmd, const char **args, const char **help)
+    
+    struct _manpage
     {
-        static char argsbuf[64], helpbuf[1024];
+        char name[256];
+        char args[64];
+        char help[1024];
+        int expire;
+        
+        _manpage()
+        {
+            expire = 0;
+        }
+        _manpage(const char *n, const char *a, const char *h)
+        {
+            if(n) strncpy(name, n, 256);
+            if(a) strncpy(args, a, 64);
+            if(h) strncpy(help, h, 1024);
+            expire = 0;
+        }
+    };
+    vector<_manpage *> _manpages;
+    
+    bool _readmanfile(const char *cmd)
+    {
         string buf;
+        
+        if(!cmd || !*cmd) return false;
         
         char badchars[] = "/$%^&*()\\'\"`~";
         for(const char *p = cmd; *p; p++) for(char *b = badchars; *b; b++) if(*p == *b) return false;
@@ -3267,91 +3311,143 @@ namespace server
         f = fopen(buf, "r");
         if(!f) return false;
         
-        if(!fgets(argsbuf, sizeof(argsbuf), f))
+        _manpage *mp;
+        mp = new _manpage;
+        _manpages.add(mp);
+        
+        if(!fgets(mp->args, 64, f))
         {
             fclose(f);
+            delete mp;
+            _manpages.drop();
             return false;
         }
-        for(char *p = argsbuf; *p; p++) if(*p=='\n') *p=0;
-        if(!fgets(helpbuf, sizeof(helpbuf), f))
+        for(char *p = mp->args; *p; p++) if(*p=='\n') *p=0;
+        if(!fgets(mp->help, 1024, f))
         {
             fclose(f);
+            delete mp;
+            _manpages.drop();
             return false;
         }
-        for(char *p = helpbuf; *p; p++) if(*p=='\n') *p=0;
+        for(char *p = mp->help; *p; p++) if(*p=='\n') *p=0;
         fclose(f);
-        *args = (const char *)argsbuf;
-        *help = (const char *)helpbuf;
         return true;
     }
+    
+    void _initman()
+    {
+        _manpages.add(new _manpage("help man", "[command]", "Shows help about command or prints avaiable commands"));
+        _manpages.add(new _manpage("info version", "", "Shows information about server"));
+        _manpages.add(new _manpage("wall", "<message>", "Prints message on the wall"));
+        _manpages.add(new _manpage("set", "<varname> <value>", "Sets variable <varname> to <value>"));
+        _manpages.add(new _manpage("showvars", "", "Shows internal server variables"));
+        _manpages.add(new _manpage("mute", "[cn]", "Mutes one or all players"));
+        _manpages.add(new _manpage("unmute", "[cn]", "Unmutes one or all players"));
+        _manpages.add(new _manpage("priv setpriv givepriv", "[cn] <priv>", "Gives privilege for user (privilege can be number or string, like master)"));
+        _manpages.add(new _manpage("takepriv", "[cn]", "Takes privilege from cn or you"));
+        _manpages.add(new _manpage("setmaster givemaster", "[cn]", "Gives master"));
+        _manpages.add(new _manpage("setadmin giveadmin", "[cn]", "Gives admin"));
+        _manpages.add(new _manpage("spec spectate", "[cn]", "Spectates one or all players"));
+        _manpages.add(new _manpage("unspec unspectate", "[cn]", "Unspectates one or all players"));
+        _manpages.add(new _manpage("stats", "[cn]", "Gives stats of you or another user"));
+        _manpages.add(new _manpage("pm", "<cn>[,cn,...] <message>", "Sends message to specified client numbers"));
+        _manpages.add(new _manpage("editmute", "[cn]", "Mutes one or all players editing"));
+        _manpages.add(new _manpage("editunmute", "[cn]", "Unmutes one or all players editing"));
+        _manpages.add(new _manpage("load", "<module>", "Loads specified module"));
+        _manpages.add(new _manpage("reload", "<module>", "Reloads specified module"));
+        _manpages.add(new _manpage("unload", "<module>", "Unloads specified module"));
+        _manpages.add(new _manpage("exec", "<cubescript>", "Executes cubescript command"));
+        _manpages.add(new _manpage("spy", "[1/0]", "Enters or leaves spy mode"));
+    }
+    
     void _man(const char *cmd, const char *args, clientinfo *ci) {
-		string msg;
-		const char *command_args;
-		const char *command_help;
+        char msg[MAXTRANS];
         bool usage = false;
+        int searchc = 0;
+        bool first;
+        bool found;
         
-		if(!args || !*args) {
-            string msg;
+        if(!args || !*args)
+        {           
+            strcpy(msg, "\f0[HELP] \f1Possible commands:\n");
+            for(int priv = 0; priv<=_getpriv(ci); priv++)
+            {
+                first  = true;
+                loopv(_funcs) if(_funcs[i] && _funcs[i]->priv == priv)
+                {
+                    if(first)
+                    {
+                        first = false;
+                        switch(priv)
+                        {
+                            case PRIV_NONE: strcat(msg, "\f7"); break;
+                            case PRIV_MASTER: case PRIV_AUTH: strcat(msg, "\f0"); break;
+                            case PRIV_ADMIN: strcat(msg, "\f2"); break;
+                            default: strcat(msg, "\f1"); break;
+                        }
+                    }
+                    else
+                    {
+                        strcat(msg, ", ");
+                    }
+                    strcat(msg, _funcs[i]->name);
+                }
+                if(!first && priv<_getpriv(ci)) strcat(msg, "\n");
+            }
             
-            formatstring(msg)("\fs\f1[MAN] Possible commands:\n\f7");
-            strcat(msg, "stats, pm, help, usage, info, version");
-            if(_getpriv(ci)>=PRIV_MASTER) {
-                strcat(msg, "\n\f0givepriv, setmaster");
-            }
-            if(_getpriv(ci)>=PRIV_ADMIN) {
-                strcat(msg, "\n\f3exec, load, set, showvars, getip");
-            }
-            //TODO: add modules hook "commands" then module hooks are completed
-            strcat(msg, "\fr");
             goto _sendf;
         }
         
         if(cmd && *cmd && !strcmp(cmd, "usage")) usage = true;
         
-		if(!strcmp(args, "wall")) {
-			command_args = "<message>";
-			command_help = "prints a message on the wall";
-		} else if(!strcmp(args, "showvars")) {
-			command_args = 0;
-			command_help = "lists all server-variables";
-		} else if(!strcmp(args, "set")) {
-			command_args = "<variable_name> <value>";
-			command_help = "sets a server-side variable";
-		} else if(!strcmp(args, "load")) {
-			command_args = "<module-path-string>";
-			command_help = "loads an external module";
-		} else if(!strcmp(args, "pm")) {
-			command_args = "<cn1>[,cn2[,cn3,...]] <message>";
-			command_help = "sends a pm to the given client-numbers (for more clients, type #pm cn1,cn2,etc message)";
-		} else if(!strcmp(args, "stats")) {
-			command_args = "[cn]";
-			command_help = "sends you your/a client stats for this match";
-		} else if(!strcmp(args, "exec")) {
-			command_args = "<cubescript-code>";
-			command_help = "executes a cubescript code";
-        } else if(!strcmp(args, "info") || !strcmp(args, "version")) {
-            command_args = 0;
-            command_help = "shows server information";
-        } else if(!strcmp(args, "setpriv")) {
-            command_args = "<cn> <privilege>";
-            command_help = "Gives privilege for user (privilege can be number or string, like master)";
-        } else if(!strcmp(args, "mute")) {
-            command_args = "<cn>";
-            command_help = "Mutes client words";
-		} else if(!strcmp(args, "man") || !strcmp(args, "help")) {
-			command_args = "[command]";
-			command_help = "gives a manual for the asked command or lists avaiable commands";
-		} else {    //TODO: add modules hook "man"
-            if(!_readmanfile(args, &command_args, &command_help))
+        if(!_manpages.length()) _initman();
+        
+        _search:
+            searchc++;
+            found = false;
+            loopv(_manpages) if(_manpages[i])
+            {
+                char name[256];
+                char *names[16];
+                int c;
+                
+                strcpy(name, _manpages[i]->name);
+                c = _argsep(name, 16, names);
+                for(int j = 0; j < c; j++)
+                {
+                    if(!strcmp(args, names[j]))
+                    {
+                        if(usage && _manpages[i]->args[0] != 0)
+                        {
+                            formatstring(msg)("\f1[HELP] Usage: \f0%s \f2%s", args, _manpages[i]->args);
+                        }
+                        else if(_manpages[i]->args[0] == 0 && _manpages[i]->help[0] != 0)
+                        {
+                            formatstring(msg)("\f1[HELP] \f2%s", _manpages[i]->help);
+                        }
+                        else if(_manpages[i]->args[0] != 0 && _manpages[i]->help[0] != 0)
+                        {
+                            formatstring(msg)("\f1[HELP] Usage: \f0%s \f2%s\n\f1[HELP] Description: \f2%s",
+                                args, _manpages[i]->args, _manpages[i]->help);
+                        }
+                        else formatstring(msg)("\f1[HELP] \f3Internal system error");
+                    
+                        found = true;
+                        break;
+                    }
+                }
+                if(found) break;
+            }
+        
+        if(!found)
+        {
+            if(_readmanfile(args) && searchc<10) goto _search;
+            else
             {
                 formatstring(msg)("\f1[HELP] \f2Man-page for command \f0%s \f2not found.", args);
-                goto _sendf;
             }
         }
-		
-		if(usage) formatstring(msg)("\f1[HELP:USAGE] \f0%s \f2%s", args, command_args);
-		else if(!command_args || !*command_args) formatstring(msg)("\f1[HELP:DESCRIPTION] \f2%s", command_help);
-        else formatstring(msg)("\f1[HELP:USAGE] \f0%s \f2%s\n\f1[HELP:DESCRIPTION] \f2%s", args, command_args, command_help);
         
         _sendf:
             sendf(ci?ci->clientnum:-1, 1, "ris" , N_SERVMSG, msg);
@@ -3574,14 +3670,7 @@ namespace server
             
             //send out privileges
             packetbuf p(MAXTRANS, ENET_PACKET_FLAG_RELIABLE);
-            putint(p, N_CURRENTMASTER);
-            putint(p, mastermode);
-            loopv(clients) if(clients[i]->privilege >= PRIV_MASTER && !clients[i]->_xi.spy)
-            {
-                putint(p, clients[i]->clientnum);
-                putint(p, clients[i]->privilege);
-            }
-            putint(p, -1);
+            _putmaster(p);
             sendpacket(-1, 1, p.finalize());
             
             sendf(ci->clientnum, 1, "ris", N_SERVMSG, "\f1[SPY] \f0You left spy mode");
@@ -3590,9 +3679,44 @@ namespace server
     
     void _spyfunc(const char *cmd, const char *args, clientinfo *ci)
     {
-        if(!ci) return;
-        if(!args || !*args) _spy(ci, !ci->_xi.spy);
-        else _spy(ci, atoi(args)!=0);
+        string buf;
+        char *argv[2];
+        
+        if(!args || !*args)
+        {
+            if(!ci) return;
+            _spy(ci, !ci->_xi.spy);
+        }
+        else
+        {
+            copystring(buf, args);
+            _argsep(buf, 2, argv);
+            
+            bool val = atoi(argv[0])!=0;
+            
+            if(argv[1] && *argv[1])
+            {
+                int cn = atoi(argv[1]);
+                if(!cn && strcmp(argv[1], "0"))
+                {
+                    _man("usage", cmd, ci);
+                    return;
+                }
+                clientinfo *cx = getinfo(cn);
+                if(!cx)
+                {
+                    defformatstring(msg)("\f2[FAIL] Unknown client number \f0%i", cn);
+                    _notify(msg, ci);
+                    return;
+                }
+                _spy(cx, val);
+            }
+            else
+            {
+                if(!ci) return;
+                _spy(ci, val);
+            }
+        }
     }
     
     void _set(const char *cmd, const char *args, clientinfo *ci)
@@ -3926,17 +4050,26 @@ namespace server
         
         if(!cmd || !*cmd || !strcmp(cmd, "setpriv") || !strcmp(cmd, "givepriv") || !strcmp(cmd, "priv"))
         {
-            if(!*argv[0] || !argv[1] || !*argv[1])
+            if(!*argv[0])
             {
                 _man("usage", cmd, ci);
                 return;
             }
             
-            cn = atoi(argv[0]);
-            if(!cn && strcmp(argv[0], "0"))
+            if(!argv[1] || !*argv[1])
             {
-                _man("usage", cmd, ci);
-                return;
+                if(!ci) return;
+                cn = ci->clientnum;
+                argv[1] = argv[0];
+            }
+            else
+            {
+                cn = atoi(argv[0]);
+                if(!cn && strcmp(argv[0], "0"))
+                {
+                    _man("usage", cmd, ci);
+                    return;
+                }
             }
             
             privilege = atoi(argv[1]);
@@ -3984,6 +4117,24 @@ namespace server
                 return;
             }
         }
+        else if(!strcmp(cmd, "takepriv"))
+        {
+            privilege = PRIV_NONE;
+            if(*argv[0])
+            {
+                if(!ci) return;
+                cn = ci->clientnum;
+            }
+            else
+            {
+                cn = atoi(argv[0]);
+                if(!cn && strcmp(argv[0], "0"))
+                {
+                    _man("usage", cmd, ci);
+                    return;
+                }
+            }
+        }
         else
         {
             _notify("\f2[DEBUG] This function isn't implemented yet", ci);
@@ -3998,7 +4149,7 @@ namespace server
             return;
         }
         
-        if(_getpriv(ci)>=PRIV_ROOT || (((_getpriv(ci)>_getpriv(cx)) || ((ci == cx) && (privilege<_getpriv(ci)))) && (privilege>=0) && (_getpriv(ci)>=privilege)))
+        if(_getpriv(ci)>=PRIV_ROOT || ((_getpriv(ci)>_getpriv(cx)) && (privilege>=0) && (_getpriv(ci)>=privilege)))
         {
             defformatstring(msg)("%s %s %s", colorname(cx), privilege?"claimed":"relinquished", privname(privilege?privilege:cx->privilege));
             cx->privilege = privilege;
@@ -4006,14 +4157,7 @@ namespace server
             packetbuf p(MAXTRANS, ENET_PACKET_FLAG_RELIABLE);
             putint(p, N_SERVMSG);
             sendstring(msg, p);
-            putint(p, N_CURRENTMASTER);
-            putint(p, mastermode);
-            loopv(clients) if(clients[i]->privilege >= PRIV_MASTER && !clients[i]->_xi.spy)
-            {
-                putint(p, clients[i]->clientnum);
-                putint(p, clients[i]->privilege);
-            }
-            putint(p, -1);
+            _putmaster(p);
             sendpacket(cx->_xi.spy?cx->clientnum:-1, 1, p.finalize());
             checkpausegame();
         }
@@ -4145,22 +4289,6 @@ namespace server
     
 //  >>> Server internals
     
-    struct _funcdeclaration
-    {
-        string name;    //function name
-        int priv;       //privilege required to call function
-        
-        _funcdeclaration(const char *_name, int _priv, void (*_func)(const char *cmd, const char *args, clientinfo *ci))
-        {
-            strcpy(name, _name);
-            priv = _priv;
-            func = _func;
-        }
-        
-        void (*func)(const char *cmd, const char *args, clientinfo *ci);
-    };
-    vector<_funcdeclaration *> _funcs;
-    
     void _initfuncs()
     {
         _init_varpriv();
@@ -4211,7 +4339,7 @@ namespace server
     inline int _getpriv(clientinfo *ci)
     {
         if(!ci) return PRIV_ROOT;
-        else return ci->privilege;
+        else return (ci->_xi.spy && ci->privilege<PRIV_ADMIN)?PRIV_ADMIN:ci->privilege;
     }
     
     inline bool _checkpriv(clientinfo *ci, int priv)
@@ -4570,6 +4698,7 @@ namespace server
 
             case N_TEXT:
             {
+                char ftext[MAXTRANS];
                 QUEUE_AI;
                 QUEUE_MSG;
                 getstring(text, p);
@@ -4577,7 +4706,8 @@ namespace server
                 if(text[0]=='#')
                 {
                     cm->messages.drop();
-                    if(isdedicatedserver()) logoutf("%s: %s", colorname(cq), text);
+                    filtertext(ftext, text);
+                    if(isdedicatedserver()) logoutf("%s: %s", colorname(cq), ftext);
                     _servcmd(text+1, ci);
                 }
                 else
@@ -4585,8 +4715,9 @@ namespace server
                     if(ci->_xi.spy)
                     {
                         cm->messages.drop();
-                        filtertext(text, text);
-                        sendservmsgf("\f3[REMOTE:\f7%s\f3] \f2%s", colorname(ci), text);
+                        filtertext(ftext, text);
+                        logoutf("%s: %s", colorname(cq), ftext);
+                        sendservmsgf("\f3[REMOTE:\f7%s \f5(%i)\f3] \f2%s", ci->name, ci->clientnum, text);
                     }
                     else if(ci->_xi.mute)
                     {
