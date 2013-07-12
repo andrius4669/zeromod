@@ -228,6 +228,7 @@ namespace server
         bool fakeprivon;
         int fakepriv;
         bool spy;
+        int failpass;
     };
     
     struct clientinfo
@@ -640,10 +641,13 @@ namespace server
     VAR(servergamespeed, 10, 100, 1000);
     FVAR(servergamelimit, 1.0, 10.0, 1440.0);  //max is 24 hours
     VAR(serverovertime, 0, 0, 1);
+    VAR(servercheckgbans, 0, 1, 2);
     
     SVAR(serverdesc, "");
     SVAR(serverpass, "");
     SVAR(adminpass, "");
+    SVAR(authpass, "");
+    SVAR(masterpass, "");
     VARF(publicserver, 0, 0, 2, {
 		switch(publicserver)
 		{
@@ -775,7 +779,7 @@ namespace server
             case PRIV_ADMIN: return "\fs\f6admin\fr";
             case PRIV_AUTH: return "\fs\f0auth\fr";
             case PRIV_MASTER: return "\fs\f0master\fr";
-            case PRIV_ROOT: return "\fs\f1root\fr";
+            case PRIV_ROOT: return "\fs\f3root\fr";
             case PRIV_NONE: return "none";
             default:
                 formatstring(buf)("\fs\f4unknown\f1[\f5%i\f1]\fr", type);
@@ -1413,8 +1417,11 @@ namespace server
         const char *name = "";
         if(val)
         {
-            bool haspass = adminpass[0] && checkpassword(ci, adminpass, pass);
-            int wantpriv = ci->local || haspass ? PRIV_ADMIN : authpriv;
+            bool hasadminpass = adminpass[0] && checkpassword(ci, adminpass, pass);
+            bool hasauthpass = authpass[0] && checkpassword(ci, authpass, pass);
+            bool hasmasterpass = masterpass[0] && checkpassword(ci, masterpass, pass);
+            if(pass && pass[0] && !hasadminpass && !hasauthpass && !hasmasterpass) ci->_xi.failpass++;
+            int wantpriv = ci->local?PRIV_ROOT:(ci->_xi.failpass>=5)?authpriv:hasadminpass?PRIV_ADMIN:hasauthpass?PRIV_AUTH:hasmasterpass?PRIV_MASTER:authpriv;
             if(ci->privilege)
             {
                 if(wantpriv <= ci->privilege) return true;
@@ -2561,7 +2568,25 @@ namespace server
 
     bool checkgban(uint ip)
     {
-        loopv(gbans) if((ip & gbans[i].mask) == gbans[i].ip) return true;
+        loopv(gbans) if((ip & gbans[i].mask) == gbans[i].ip)
+        {
+            switch(servercheckgbans)
+            {
+                case 1: return true;
+                case 0: return false;
+                default:
+                {
+                    bool hasadmin = false;
+                    defformatstring(msg)("\f3[GBAN] \f0gbanned client \f5(%i.%i.%i.%i)", ip&0xFF, (ip>>8)&0xFF, (ip>>16)&0xFF, (ip>>24)&0xFF);
+                    loopv(clients) if(clients[i] && clients[i]->privilege>=PRIV_ADMIN)
+                    {
+                        hasadmin = true;
+                        sendf(clients[i]->clientnum, 1, "ris", N_SERVMSG, msg);
+                    }
+                    return !hasadmin;
+                }
+            }
+        }
         return false;
     }
 
@@ -2601,6 +2626,8 @@ namespace server
             return DISC_NONE;
         }
         if(adminpass[0] && checkpassword(ci, adminpass, pwd)) return DISC_NONE;
+        if(authpass[0] && checkpassword(ci, authpass, pwd)) return DISC_NONE;
+        if(masterpass[0] && checkpassword(ci, masterpass, pwd)) return DISC_NONE;
         if(numclients(-1, false, true)>=maxclients) return DISC_MAXCLIENTS;
         uint ip = getclientip(ci->clientnum);
         loopv(bannedips) if(bannedips[i].ip==ip) return DISC_IPBAN;
@@ -3402,7 +3429,8 @@ namespace server
                         {
                             case PRIV_NONE: concatstring(msg, "\f7", MAXTRANS); break;
                             case PRIV_MASTER: case PRIV_AUTH: concatstring(msg, "\f0", MAXTRANS); break;
-                            case PRIV_ADMIN: concatstring(msg, "\f3", MAXTRANS); break;
+                            case PRIV_ADMIN: concatstring(msg, "\f6", MAXTRANS); break;
+                            case PRIV_ROOT: concatstring(msg, "\f3", MAXTRANS); break;
                             default: concatstring(msg, "\f1", MAXTRANS); break;
                         }
                     }
@@ -3910,11 +3938,13 @@ namespace server
         char *argv[2];
         char buf[MAXTRANS];
         bool needload;
+        bool needunload;
         string fname;
         
         if(!args || !*args) return;
         
         needload = (!cmd || !*cmd || !strcmp(cmd, "load") || !strcmp(cmd, "reload"));
+        needunload = (cmd && *cmd && (!strcmp(cmd, "reload") || !strcmp(cmd, "unload")));
         
         copystring(buf, args, MAXTRANS);
         
@@ -3959,9 +3989,9 @@ namespace server
         
         if(m->h)
         {
-            bool needunload = true;
             if(needload)
             {
+                if(!needunload) return;
                 char *(*reinitfunc)();
                 *(void **)(&reinitfunc) = Z_GETSYM(m->h, "z_reinit");
                 if(reinitfunc)
@@ -3982,6 +4012,18 @@ namespace server
             }
             if(needunload)
             {
+                char *(*uninitfunc)();
+                *(void **)(&uninitfunc) = Z_GETSYM(m->h, "z_uninit");
+                if(uninitfunc)
+                {
+                    char *ret;
+                    ret = uninitfunc();
+                    if(ret)
+                    {
+                        defformatstring(msg)("\f1[WARN] \f3Plugin \f0%s \f3uninitialization function failed \f2(%s)", m->name, ret);
+                        _notify(msg, ci, PRIV_ADMIN);
+                    }
+                }
                 Z_FREELIB(m->h);
                 m->h = 0;
             }
@@ -4368,7 +4410,7 @@ namespace server
     
     void _privfail(clientinfo *ci)
     {
-        _notify("\f1[PRIV] \f5You aren't privileged to do this task", ci);
+        _notify("\f4[PRIV] \f5You aren't privileged to do this task", ci);
     }
     
     void _nocommand(const char *cmd, clientinfo *ci)
