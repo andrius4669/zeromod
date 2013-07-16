@@ -46,8 +46,9 @@
         putint(q, ci->state.armour);
         putint(q, ci->state.gunselect);
         putint(q, ci->privilege);
-        putint(q, ci->state.state);
-        uint ip = getclientip(ci->clientnum);
+        putint(q, ci->_xi.spy?CS_SPECTATOR:ci->state.state);
+        // i think it volatiles users privacy; ip shouldnt be shown to everyone who wants
+        uint ip = serverhideip?0:getclientip(ci->clientnum);
         q.put((uchar*)&ip, 3);
         sendserverinforeply(q);
     }
