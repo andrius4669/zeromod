@@ -1,5 +1,7 @@
 #CXXFLAGS= -O3 -fomit-frame-pointer
-CXXFLAGS= -O2 -pipe -fstack-protector
+#CXXFLAGS= -O2 -pipe -fstack-protector
+CFLAGS= -O0 -g -pipe -fstack-protector
+CXXFLAGS= -O0 -g -pipe -fstack-protector
 override CXXFLAGS+= -Wall -fsigned-char -fno-exceptions -fno-rtti
 
 PLATFORM= $(shell uname -s)

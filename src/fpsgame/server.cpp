@@ -22,7 +22,7 @@ namespace server
 {
     struct _hookparam
     {
-        void *args[8];
+        void *args[16];
     } __attribute__((packed));
     
     _hookparam _hp;
@@ -943,6 +943,7 @@ namespace server
  
     bool pickup(int i, int sender)         // server side item pickup, acknowledge first client that gets it
     {
+        //TODO: anticheat
         if((m_timed && gamemillis>=gamelimit) || !sents.inrange(i) || !sents[i].spawned) return false;
         clientinfo *ci = getinfo(sender);
         if(!ci || (!ci->local && !ci->state.canpickup(sents[i].type))) return false;
@@ -1480,6 +1481,9 @@ namespace server
             else formatstring(msg)("%s claimed %s as '\fs\f5%s\fr'", colorname(ci), name, authname);
         } 
         else formatstring(msg)("%s %s %s", colorname(ci), val ? "claimed" : "relinquished", name);
+        string ftext;
+        filtertext(ftext, msg);
+        logoutf(ftext);
         packetbuf p(MAXTRANS, ENET_PACKET_FLAG_RELIABLE);
         putint(p, N_SERVMSG);
         sendstring(msg, p);
@@ -1510,8 +1514,16 @@ namespace server
                     else formatstring(kicker)("%s as '\fs\f5%s\fr'", colorname(ci), authname);
                 }
                 else copystring(kicker, colorname(ci));
-                if(reason && reason[0]) sendservmsgf("%s kicked %s because: %s", kicker, colorname(vinfo), reason);
-                else sendservmsgf("%s kicked %s", kicker, colorname(vinfo));
+                if(ci->_xi.spy)
+                {
+                    if(reason && reason[0]) sendservmsgf("%s was kicked because: %s", colorname(vinfo), reason);
+                    else sendservmsgf("%s was kicked", colorname(vinfo));
+                }
+                else
+                {
+                    if(reason && reason[0]) sendservmsgf("%s kicked %s because: %s", kicker, colorname(vinfo), reason);
+                    else sendservmsgf("%s kicked %s", kicker, colorname(vinfo));
+                }
                 uint ip = getclientip(victim);
                 addban(ip, 4*60*60000);
                 kickclients(ip, ci);
@@ -1565,7 +1577,7 @@ namespace server
             if(ci->local) return type;
         }
         // only allow edit messages in coop-edit mode
-        if(type>=N_EDITENT && type<=N_EDITVAR && !m_edit) return -1;
+        if(type>=N_EDITMODE && type<=N_EDITVAR && !m_edit) return -1;
         // server only messages
         static const int servtypes[] = { N_SERVINFO, N_INITCLIENT, N_WELCOME, N_MAPCHANGE, N_SERVMSG, N_DAMAGE, N_HITPUSH, N_SHOTFX, N_EXPLODEFX, N_DIED, N_SPAWNSTATE, N_FORCEDEATH, N_TEAMINFO, N_ITEMACC, N_ITEMSPAWN, N_TIMEUP, N_CDIS, N_CURRENTMASTER, N_PONG, N_RESUME, N_BASESCORE, N_BASEINFO, N_BASEREGEN, N_ANNOUNCE, N_SENDDEMOLIST, N_SENDDEMO, N_DEMOPLAYBACK, N_SENDMAP, N_DROPFLAG, N_SCOREFLAG, N_RETURNFLAG, N_RESETFLAG, N_INVISFLAG, N_CLIENT, N_AUTHCHAL, N_INITAI, N_EXPIRETOKENS, N_DROPTOKENS, N_STEALTOKENS, N_DEMOPACKET };
         if(ci) 
@@ -2157,7 +2169,7 @@ namespace server
         best.setsize(0); \
         best.add(clients[0]); \
         besti = best[0]->state.stat; \
-        for(int i = 1; i < clients.length(); i++) if(clients[i] && clients[i]->state.state != CS_SPECTATOR) \
+        for(int i = 1; i < clients.length(); i++) if(clients[i] && !clients[i]->_xi.spy) \
         { \
             if(clients[i]->state.stat > besti) \
             { \
@@ -2174,13 +2186,13 @@ namespace server
 
     void _printbest(vector<clientinfo *> &best, int besti, char *msg)
     {
-        int l = min(best.length(), 3);
+        int l = min(best.length(), 2);
         for(int i = 0; i < l; i++)
         {
             concatstring(msg, colorname(best[i]), MAXTRANS);
             if(i + 1 < l) concatstring(msg, ", ", MAXTRANS);
         }
-        defformatstring(buf)(" \f0(%i)", besti);
+        defformatstring(buf)(" \f1(\f0%i\f1)", besti);
         concatstring(msg, buf, MAXTRANS);
     }
     
@@ -2198,49 +2210,47 @@ namespace server
                 int besti;
                 char msg[MAXTRANS];
                 
-                copystring(msg, "\f0[BEST STATS]", MAXTRANS);
-                
-                concatstring(msg, " \f2Frags: \f7", MAXTRANS);
+                copystring(msg, "\f1[BEST STATS] frags: \f7", MAXTRANS);
                 _BESTSTAT(frags)
                 _printbest(best, besti, msg);
                 
-                concatstring(msg, " \f1Deaths: \f7", MAXTRANS);
+                concatstring(msg, " deaths: \f7", MAXTRANS);
                 _BESTSTAT(deaths)
                 _printbest(best, besti, msg);
                 
                 if(m_teammode)
                 {
-                    concatstring(msg, " \f6Teamkills: \f7", MAXTRANS);
+                    concatstring(msg, " teamkills: \f7", MAXTRANS);
                     _BESTSTAT(teamkills)
                     _printbest(best, besti, msg);
                 }
                 
-                concatstring(msg, " \f2Accuracy: \f7", MAXTRANS);
+                concatstring(msg, " accuracy: \f7", MAXTRANS);
                 
                 best.setsize(0);
                 best.add(clients[0]);
-                float bestf = float(best[0]->state.damage*100)/float(max(best[0]->state.shotdamage, 1));
+                besti = best[0]->state.damage*100/max(best[0]->state.shotdamage, 1);
                 for(int i = 1; i < clients.length(); i++)
                 {
-                    if(((float(clients[i]->state.damage*100)/float(max(clients[i]->state.shotdamage, 1))) - bestf) >= 0.2)
+                    if((clients[i]->state.damage*100/max(clients[i]->state.shotdamage, 1) > besti))
                     {
                         best.setsize(0);
                         best.add(clients[i]);
-                        bestf = float(clients[i]->state.damage*100)/float(max(clients[i]->state.shotdamage, 1));
+                        besti = clients[i]->state.damage*100/max(clients[i]->state.shotdamage, 1);
                     }
-                    else if(((float(clients[i]->state.damage*100)/float(max(clients[i]->state.shotdamage, 1))) - bestf) < 0.2)
+                    else if((clients[i]->state.damage*100/max(clients[i]->state.shotdamage, 1)) == besti)
                     {
                         best.add(clients[i]);
                     }
                 }
                 
-                int l = min(best.length(), 3);
+                int l = min(best.length(), 2);
                 for(int i = 0; i < l; i++)
                 {
                     concatstring(msg, colorname(best[i]), MAXTRANS);
                     if(i + 1 < l) concatstring(msg, ", ", MAXTRANS);
                 }
-                defformatstring(buf)(" \f0(%.3f)", bestf);
+                defformatstring(buf)(" \f1(\f0%i%%\f1)", besti);
                 concatstring(msg, buf, MAXTRANS);
                 
                 sendf(-1, 1, "ris", N_SERVMSG, msg);
@@ -2382,7 +2392,7 @@ namespace server
                     if(!target || target->state.state!=CS_ALIVE || h.lifesequence!=target->state.lifesequence || h.rays<1 || h.dist > guns[gun].range + 1) continue;
 
                     totalrays += h.rays;
-                    if(totalrays>maxrays) continue;
+                    if(totalrays>maxrays) continue; //TODO: hacker!
                     int damage = h.rays*guns[gun].damage;
                     if(gs.quadmillis) damage *= 4;
                     dodamage(target, ci, damage, gun, h.dir);
@@ -2633,6 +2643,7 @@ namespace server
     void clientdisconnect(int n)
     {
         clientinfo *ci = getinfo(n);
+        if(!ci) return;
         loopv(clients)
         {
             if(clients[i]->authkickvictim == ci->clientnum) clients[i]->cleanauth(); 
@@ -2674,7 +2685,6 @@ namespace server
             switch(servercheckgbans)
             {
                 case 1: return true;
-                case 0: return false;
                 default:
                 {
                     bool hasadmin = false;
@@ -2684,7 +2694,7 @@ namespace server
                         hasadmin = true;
                         sendf(clients[i]->clientnum, 1, "ris", N_SERVMSG, msg);
                     }
-                    return !hasadmin;
+                    return (servercheckgbans==0)?false:(!hasadmin);
                 }
             }
         }
@@ -2922,9 +2932,14 @@ namespace server
 
         if(m_demo) setupdemoplayback();
         
-        _hp.args[0] = (void *)getclientip(ci->clientnum);
-        _hp.args[1] = (void *)colorname(ci);
-        _exechook("connected");
+        {
+            unsigned int t;
+            _hp.args[0] = &ci->clientnum;
+            _hp.args[1] = (void *)colorname(ci);
+            t = getclientip(ci->clientnum);
+            _hp.args[2] = &t;
+            _exechook("connected");
+        }
         
         if(servermotd[0]) sendf(ci->clientnum, 1, "ris", N_SERVMSG, servermotd);
     }
@@ -2992,7 +3007,7 @@ namespace server
     void _init_varpriv()
     {
         _var_priv.add(new _var_sec("botname", PRIV_ADMIN));
-        _var_priv.add(new _var_sec("mastercountbots", PRIV_ADMIN));
+//      _var_priv.add(new _var_sec("mastercountbots", PRIV_ADMIN));
     }
     
     struct _varstruct
@@ -3432,18 +3447,18 @@ namespace server
         char name[256];
         char args[64];
         char help[1024];
-        int expire;
+//      int expire;
         
         _manpage()
         {
-            expire = 0;
+//          expire = 0;
         }
         _manpage(const char *n, const char *a, const char *h)
         {
             if(n) strncpy(name, n, 256);
             if(a) strncpy(args, a, 64);
             if(h) strncpy(help, h, 1024);
-            expire = 0;
+//          expire = 0;
         }
     };
     vector<_manpage *> _manpages;
@@ -3514,14 +3529,19 @@ namespace server
         _manpages.add(new _manpage("exec", "<cubescript>", "Executes cubescript command"));
         _manpages.add(new _manpage("spy", "[1/0]", "Enters or leaves spy mode"));
         _manpages.add(new _manpage("np forgive fg", "", "Forgives teamkill"));
+        _manpages.add(new _manpage("interm intermission", "", "Starts intermission"));
+        _manpages.add(new _manpage("ban", "cn [time]", "Bans client; time is in format: [num][ ][s/m/h/d]; by default, time is 4h; example: #ban 0 1d"));
     }
     
-    void _man(const char *cmd, const char *args, clientinfo *ci) {
+    void _man(const char *cmd, const char *args, clientinfo *ci)
+    {
         char msg[MAXTRANS];
         bool usage = false;
         int searchc = 0;
         bool first;
         bool found;
+        
+        if(!ci) return;
         
         if(!args || !*args)
         {           
@@ -3885,7 +3905,7 @@ namespace server
         copystring(buf, args);
         
         _argsep(buf, 2, argv);
-        if(!argv[0] || !argv[1]) return;
+        if(!argv[0] || !argv[0][0] || !argv[1] || !argv[1][0]) return;
         
         string msg;
         
@@ -3894,7 +3914,7 @@ namespace server
         
         if(success)
         {
-            formatstring(msg)("\fs\f0[VAR]\fr %s=%s", argv[0], argv[1]);
+            formatstring(msg)("\f0[VAR] \f7%s=%s", argv[0], argv[1]);
             int pr = _var_getpriv(argv[0]);
             if(pr==PRIV_NONE) sendf(-1, 1, "ris", N_SERVMSG, msg);
             else
@@ -3907,7 +3927,7 @@ namespace server
         }
         else if(ci)
         {
-            formatstring(msg)("\fs\f1[VAR]\fr Failed to set variable %s", argv[0]);
+            formatstring(msg)("\f1[VAR] \f7Failed to set variable %s", argv[0]);
             sendf(ci->clientnum, 1, "ris", N_SERVMSG, msg);
         }
         else
@@ -4228,7 +4248,7 @@ namespace server
         cnc = _argsep(argv[0], 16, cns, ',');
         
         vector<int> clientnums;
-        for(int i=0;i<cnc;i++)
+        for(int i = 0; i < min(cnc, 16); i++)
         {
             int j = atoi(cns[i]);
             if(j==0 && *cns[i]!='0')
@@ -4239,14 +4259,14 @@ namespace server
                     sendf(ci->clientnum, 1, "ris", N_SERVMSG, msg);
                     return;
                 }
-                else continue;
+                else return;
             }
             bool exists=false;
             for(int k=0;k<clientnums.length();k++) if(j==clientnums[k]) exists=true;
             if(!exists) clientnums.add(j);
         }
         
-        formatstring(msg)("\fs\f1[PM:\f0%i\f1:\f7%s\f1] \f0%s\fr", ci->clientnum, colorname(ci), argv[1]);
+        formatstring(msg)("\f1[PM:\f0%i\f1:\f7%s\f1] \f0%s", ci->clientnum, colorname(ci), argv[1]);
         
         for(int i=0;i<clientnums.length();i++)
         {
@@ -4424,6 +4444,128 @@ namespace server
         ci->_xi.tkiller = 0;
     }
     
+    void _interm(const char *cmd, const char *args, clientinfo *ci)
+    {
+        startintermission();
+    }
+    /*
+    void _rename(const char *cmd, const char *args, clientinfo *ci)
+    {
+        packetbuf p(MAXTRANS, ENET_PACKET_FLAG_RELIABLE);
+        putint(p, N_CLIENT);
+        putint(p, cn);
+        putint(p, ???);
+        putint(p, N_SWITCHNAME);
+        putint(p, 
+    }
+    */
+/*
+    void _sendmap(clientinfo *ci)
+    {
+        
+    }
+    
+    void _sendto(const char *cmd, const char *args, clientinfo *ci)
+    {
+        int cn;
+        cn = atoi(args);
+        if(!cn && strcmp(args, "0")
+        {
+            if(ci)
+            {
+                defformatstring(msg)("\f2[FAIL] Unknown client number \"%s\"", args);
+                sendf(ci->clientnum, 1, "ris", msg);
+            }
+            return;
+        }
+        
+        clientnum *cx = getinfo(cn);
+        if(cx)
+        {
+            if(!mapdata) sendf(sender, 1, "ris", N_SERVMSG, "no map to send");
+            else if(ci->getmap) sendf(sender, 1, "ris", N_SERVMSG, "already sending map");
+            else
+            {
+                sendservmsgf("[%s is getting the map]", colorname(ci));
+                if((ci->getmap = sendfile(sender, 2, mapdata, "ri", N_SENDMAP))) ci->getmap->freeCallback = freegetmap;
+                ci->needclipboard = totalmillis ? totalmillis : 1;
+            }
+        }
+    }
+*/
+    void _ban(const char *cmd, const char *args, clientinfo *ci)
+    {
+        string buf;
+        char *argv[2];
+        if(!args || !args[0]) return;
+        copystring(buf, args);
+        _argsep(buf, 2, argv);
+        int cn = atoi(argv[0]);
+        if(!cn && strcmp(argv[0], "0"))
+        {
+            if(ci) sendf(ci->clientnum, 1, "ris", "\f2[FAIL] Such client number not found");
+            else logoutf("_ban:%s isnt cn", argv[0]);
+            return;
+        }
+        clientinfo *cx = getinfo(cn);
+        uint ip = getclientip(cn);
+        if(!ip || !cx)
+        {
+            if(ci) sendf(ci->clientnum, 1, "ris", "\f2[FAIL] Such client number not found");
+            else logoutf("_ban:no such cn");
+            return;
+        }
+        
+        if(_getpriv(ci) < PRIV_ROOT && _getpriv(ci) < _getpriv(cx))
+        {
+            _privfail(ci);
+            return;
+        }
+        
+        int t;
+        
+        defformatstring(msg)("\f3[BAN] \f5%i.%i.%i.%i is banned for %s", ip&0xFF, (ip>>8)&0xFF, (ip>>16)&0xFF, (ip>>24)&0xFF,
+                             (argv[1]&&argv[1][0])?argv[1]:"4h");
+        
+        if(argv[1] && argv[1][0])
+        {
+            filtertext(argv[1], argv[1], false);
+            char *z = argv[1];
+            while(*z && *z>='0' && *z<='9') z++;
+            int m;
+            switch(*z)
+            {
+                case 's': m = 1000; break;
+                case 'm': case 'M': m = 60000; break;
+                case 'h': case 'H': case 0: m = 60*60000; break;
+                case 'd': case 'D': m = 24*60*60000; break;
+                default:
+                    if(ci) sendf(ci->clientnum, 1, "ris", "\f2[FAIL] Unknown time specification");
+                    else logoutf("_ban:unknown time %s", argv[1]);
+                    return;
+            }
+            if(z == argv[1]) t = 1;
+            else
+            {
+                *z = 0;
+                t = atoi(argv[1]);
+                if(!t)
+                {
+                    if(ci) sendf(ci->clientnum, 1, "ris", "\f2[FAIL] Unknown time specification");
+                    else logoutf("_ban:unknown time %s", argv[1]);
+                    return;
+                }
+            }
+            t *= m;
+        }
+        else t = 4*60*60000;
+        
+        sendservmsg(msg);
+        
+        addban(ip, t);
+        kickclients(ip, 0);
+    }
+
     void _stats(const char *cmd, const char *args, clientinfo *ci)
     {
         vector<clientinfo *> cns;
@@ -4549,7 +4691,6 @@ namespace server
     {
         _init_varpriv();
         
-        _funcs.add(new _funcdeclaration("test", 0, _test));
         _funcs.add(new _funcdeclaration("wall", PRIV_MASTER, _wall));
         _funcs.add(new _funcdeclaration("man", 0, _man));
         _funcs.add(new _funcdeclaration("help", 0, _man));
@@ -4582,23 +4723,28 @@ namespace server
         _funcs.add(new _funcdeclaration("np", 0, _np));
         _funcs.add(new _funcdeclaration("fg", 0, _np));
         _funcs.add(new _funcdeclaration("forgive", 0, _np));
+        _funcs.add(new _funcdeclaration("interm", PRIV_ADMIN, _interm));
+        _funcs.add(new _funcdeclaration("intermission", PRIV_ADMIN, _interm));
+        _funcs.add(new _funcdeclaration("ban", PRIV_ADMIN, _ban));
     }
     
     void _privfail(clientinfo *ci)
     {
-        _notify("\f4[PRIV] \f5You aren't privileged to do this task", ci);
+        if(!ci) return;
+        sendf(ci->clientnum, 1, "ris", N_SERVMSG, "\f4[PRIV] \f5You aren't privileged to do this task");
     }
     
     void _nocommand(const char *cmd, clientinfo *ci)
     {
+        if(!ci || !cmd || !cmd[0]) return;
         defformatstring(msg)("\f4[????] \f2Undefined command \f0%s\f2. Please see manual (type \f0#man\f2)", cmd);
-        _notify(msg, ci);
+        sendf(ci->clientnum, 1, "ris", msg);
     }
     
     inline int _getpriv(clientinfo *ci)
     {
         if(!ci) return PRIV_ROOT;
-        else return (ci->_xi.spy && ci->privilege<PRIV_ADMIN)?PRIV_ADMIN:ci->privilege;
+        else return ci->local?PRIV_ROOT:ci->privilege;
     }
     
     inline bool _checkpriv(clientinfo *ci, int priv)
@@ -4614,6 +4760,7 @@ namespace server
         
         if(!_funcs.length()) _initfuncs();
         
+        if(!cmd || !cmd[0]) return;
         strncpy(str, cmd, MAXTRANS);
         _argsep(str, 2, argv);
         
@@ -4621,10 +4768,10 @@ namespace server
         {
             if(!strcmp(argv[0], _funcs[i]->name))
             {
-                if(_checkpriv(ci, _funcs[i]->priv))
+                if(_funcs[i] && _checkpriv(ci, _funcs[i]->priv))
                 {
                     //execute function
-                    _funcs[i]->func(argv[0], argv[1], ci);
+                    _funcs[i]->func(argv[0], argv[1]?:"", ci);
                 }
                 else _privfail(ci);
                 executed=true;
@@ -4720,7 +4867,7 @@ namespace server
             receivefile(sender, p.buf, p.maxlen);
             return;
         }
-
+        if(!ci) _debug("parsepacket::ci is null");
         if(p.packet->flags&ENET_PACKET_FLAG_RELIABLE) reliablemessages = true;
         #define QUEUE_AI clientinfo *cm = cq;
         #define QUEUE_MSG { if(cm && (!cm->local || demorecord || hasnonlocalclients())) while(curmsg<p.length()) cm->messages.add(p.buf[curmsg++]); }
@@ -4737,7 +4884,7 @@ namespace server
         int curmsg;
         while((curmsg = p.length()) < p.maxlen) switch(type = checktype(getint(p), ci))
         {
-            case N_POS:
+            case N_POS:     //TODO: anticheat
             {
                 int pcn = getuint(p); 
                 p.get(); 
@@ -4817,7 +4964,7 @@ namespace server
             case N_EDITMODE:
             {
                 int val = getint(p);
-                if(!ci->local && !m_edit) { disconnect_client(sender, DISC_MSGERR); return; };
+                if(!ci->local && !m_edit) break;
                 if(val ? ci->state.state!=CS_ALIVE && ci->state.state!=CS_DEAD : ci->state.state!=CS_EDITING) break;
                 if(smode)
                 {
@@ -4980,10 +5127,11 @@ namespace server
                 getstring(text, p);
                 filtertext(ftext, text);
                 _checktext(ftext, ci);
-                if(!ci) break;
+                if(!ci || !cq) return;
                 if(text[0]=='#')
                 {
-                    cm->messages.drop();
+                    ci->messages.drop();
+                    if(strlen(text) > MAXSTRLEN) break;
                     if(isdedicatedserver()) logoutf("%s: %s", colorname(cq), ftext);
                     _servcmd(text+1, ci);
                 }
@@ -4991,13 +5139,13 @@ namespace server
                 {
                     if(ci->_xi.spy)
                     {
-                        cm->messages.drop();
+                        ci->messages.drop();
                         logoutf("%s: %s", colorname(cq), ftext);
                         sendservmsgf("\f3[REMOTE:\f7%s \f5(%i)\f3] \f2%s", ci->name, ci->clientnum, text);
                     }
                     else if(ci->_xi.mute)
                     {
-                        cm->messages.drop();
+                        ci->messages.drop();
                         sendf(sender, 1, "ris", N_SERVMSG, "\f5[MUTE] \f3You are mutted");
                     }
                     else
@@ -5012,16 +5160,22 @@ namespace server
             case N_SAYTEAM:
             {
                 getstring(text, p);
-                if(!ci || !cq || (ci->state.state==CS_SPECTATOR && !ci->local && !ci->privilege) || !m_teammode || !cq->team[0]) break;
+                if(!ci || !cq) break;
+                if(isdedicatedserver()) logoutf("%s <%s>: %s", colorname(cq), cq->team, text);
                 _checktext(text, ci);
+                if(ci->_xi.spy)
+                {
+                    defformatstring(msg)("\f1[REMOTECHAT:\f7%s\f1] \f0%s", colorname(ci), text);
+                    loopv(clients) if(clients[i] && clients[i]->_xi.spy)
+                    {
+                        sendf(ci->clientnum, 1, "ris", N_SERVMSG, msg);
+                    }
+                    break;
+                }
+                if(!m_teammode || !cq->team[0] || (ci->state.state==CS_SPECTATOR && !ci->local && !ci->privilege)) break;
                 if(ci->_xi.mute)
                 {
                     sendf(ci->clientnum, 1, "ris", N_SERVMSG, "\f5[MUTE] \f3You are mutted");
-                    break;
-                }
-                if(ci->_xi.spy)
-                {
-                    sendservmsgf("\f1[REMOTECHAT:\f7%s\f1] \f0%s", colorname(ci), text);
                     break;
                 }
                 loopv(clients)
@@ -5030,7 +5184,6 @@ namespace server
                     if(t==cq || t->state.state==CS_SPECTATOR || t->state.aitype != AI_NONE || strcmp(cq->team, t->team)) continue;
                     sendf(t->clientnum, 1, "riis", N_SAYTEAM, cq->clientnum, text);
                 }
-                if(isdedicatedserver()) logoutf("%s <%s>: %s", colorname(cq), cq->team, text);
                 break;
             }
 
@@ -5105,7 +5258,6 @@ namespace server
                 int size = server::msgsizelookup(type);
                 if(size<=0) { disconnect_client(sender, DISC_MSGERR); return; }
                 loopi(size-1) getint(p);
-                if(!m_edit) { disconnect_client(sender, DISC_MSGERR); return; } //TODO: probably cheater; ban
                 if(ci && ci->_xi.editmute)
                 {
                     if(!ci->_xi.editmutewarn || ci->_xi.editmutewarn < totalmillis)
@@ -5121,7 +5273,6 @@ namespace server
             }
             
             case N_REMIP:
-                if(!m_edit) { disconnect_client(sender, DISC_MSGERR); return; }
                 if(!ci || ci->_xi.editmute) break;
                 QUEUE_MSG;
                 break;
@@ -5132,7 +5283,6 @@ namespace server
                 loopk(3) getint(p);
                 int type = getint(p);
                 loopk(5) getint(p);
-                if(!m_edit) { disconnect_client(sender, DISC_MSGERR); return; }
                 if(!ci || ci->state.state==CS_SPECTATOR) break;
                 if(ci->_xi.editmute)
                 {
@@ -5169,7 +5319,6 @@ namespace server
                     case ID_FVAR: getfloat(p); break;
                     case ID_SVAR: getstring(text, p);
                 }
-                if(!m_edit) { disconnect_client(sender, DISC_MSGERR); return; }
                 if(ci && ci->_xi.editmute)
                 {
                     if(!ci->_xi.editmutewarn || ci->_xi.editmutewarn < totalmillis)
@@ -5480,7 +5629,6 @@ namespace server
                 int size = server::msgsizelookup(type);
                 if(size<=0) { disconnect_client(sender, DISC_MSGERR); return; }
                 loopi(size-1) getint(p);
-                if(!m_edit) { disconnect_client(sender, DISC_MSGERR); return; }
                 if(ci && ci->_xi.editmute)
                 {
                     if(!ci->_xi.editmutewarn || ci->_xi.editmutewarn < totalmillis)
@@ -5502,7 +5650,6 @@ namespace server
                 int size = server::msgsizelookup(type);
                 if(size<=0) { disconnect_client(sender, DISC_MSGERR); return; }
                 loopi(size-1) getint(p);
-                if(!m_edit) { disconnect_client(sender, DISC_MSGERR); return; }
                 if(ci && ci->_xi.editmute)
                 {
                     if(!ci->_xi.editmutewarn || ci->_xi.editmutewarn < totalmillis)
@@ -5542,9 +5689,15 @@ namespace server
             } 
 
             case N_SERVCMD:
+            {
+                char ftext[MAXTRANS];
                 getstring(text, p);
+                if(!ci || (strlen(text) > MAXSTRLEN)) break;
+                filtertext(ftext, text);
+                logoutf("N_SERVMSG:%s:%s", colorname(ci), ftext);
                 _servcmd(text, ci);
                 break;
+            }
                      
             #define PARSEMESSAGES 1
             #include "capture.h"

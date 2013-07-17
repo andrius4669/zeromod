@@ -11,7 +11,7 @@ char dbfile[260] = "GeoIP.dat";
 
 struct hookparam
 {
-    void *args[8];
+    void *args[16];
 } __attribute__((packed));
 
 //void *(* sendf)(int, int, char *, ...);
@@ -54,10 +54,13 @@ char ipaddr[128];
 
 int on_connect(struct hookparam *hp)
 {
-    unsigned int ip = (unsigned int)hp->args[0];
     char *name = (char *)hp->args[1];
     
-    if(!ip || !name || !*name || !gi) return 0;
+    if(!name || !*name || !gi || !hp->args[2]) return 0;
+    
+    unsigned int ip = *(unsigned int *)hp->args[2];
+    
+    if(!ip) return 0;
     
     sprintf(ipaddr, "%i.%i.%i.%i", ip&0xFF, (ip>>8)&0xFF, (ip>>16)&0xFF, (ip>>24)&0xFF);
     
