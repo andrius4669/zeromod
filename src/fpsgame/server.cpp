@@ -3618,7 +3618,7 @@ namespace server
         
         if(!found)
         {
-            if(_readmanfile(args) && searchc<10) goto _search;
+            if(searchc<5 && _readmanfile(args)) goto _search;
             else
             {
                 formatstring(msg)("\f1[HELP] \f2Man-page for command \f0%s \f2not found.", args);
@@ -4088,7 +4088,7 @@ namespace server
     void _load(const char *cmd, const char *args, clientinfo *ci)
     {
         char *argv[2];
-        char buf[MAXTRANS];
+        string buf;
         bool needload;
         bool needunload;
         string fname;
@@ -4098,7 +4098,7 @@ namespace server
         needload = (!cmd || !*cmd || !strcmp(cmd, "load") || !strcmp(cmd, "reload"));
         needunload = (cmd && *cmd && (!strcmp(cmd, "reload") || !strcmp(cmd, "unload")));
         
-        copystring(buf, args, MAXTRANS);
+        copystring(buf, args);
         
         _argsep(buf, 2, argv);
         
@@ -4230,7 +4230,7 @@ namespace server
         char *argv[2];
         char *cns[16];
         int cnc;
-        char buf[MAXTRANS];
+        string buf;
         string msg;
         
         if(!args || !*args)
@@ -4239,7 +4239,7 @@ namespace server
             return;
         }
         
-        copystring(buf, args, MAXTRANS);
+        copystring(buf, args);
         
         _argsep(buf, 2, argv);
         
@@ -4738,7 +4738,7 @@ namespace server
     {
         if(!ci || !cmd || !cmd[0]) return;
         defformatstring(msg)("\f4[????] \f2Undefined command \f0%s\f2. Please see manual (type \f0#man\f2)", cmd);
-        sendf(ci->clientnum, 1, "ris", msg);
+        sendf(ci->clientnum, 1, "ris", N_SERVMSG, msg);
     }
     
     inline int _getpriv(clientinfo *ci)
@@ -4755,13 +4755,13 @@ namespace server
     void _servcmd(const char *cmd, clientinfo *ci)
     {
         char *argv[2];
-        char str[MAXTRANS];
+        string str;
         bool executed=false;
         
         if(!_funcs.length()) _initfuncs();
         
         if(!cmd || !cmd[0]) return;
-        strncpy(str, cmd, MAXTRANS);
+        copystring(str, cmd);
         _argsep(str, 2, argv);
         
         loopv(_funcs)
