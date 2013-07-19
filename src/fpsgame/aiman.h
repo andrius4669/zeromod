@@ -122,7 +122,6 @@ namespace aiman
         ci->playermodel = rnd(128);
 		ci->aireinit = 2;
 		ci->connected = true;
-        memset(&ci->_xi, 0, sizeof(_extrainfo));
         dorefresh = true;
 		return true;
 	}

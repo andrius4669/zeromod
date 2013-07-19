@@ -230,6 +230,7 @@ namespace server
         bool spy;
         int failpass;
         clientinfo *tkiller;
+        int votekickvictim;
     };
     
     struct clientinfo
@@ -370,6 +371,8 @@ namespace server
             needclipboard = 0;
             cleanclipboard();
             cleanauth();
+            memset(&_xi, 0, sizeof(_extrainfo));
+            _xi.votekickvictim = -1;
             mapchange();
         }
 
@@ -2222,7 +2225,7 @@ namespace server
                 {
                     concatstring(msg, " teamkills: \f7", MAXTRANS);
                     _BESTSTAT(teamkills)
-                    _printbest(best, besti, msg);
+                    if(besti) _printbest(best, besti, msg);
                 }
                 
                 concatstring(msg, " accuracy: \f7", MAXTRANS);
@@ -2614,7 +2617,6 @@ namespace server
         ci->connectmillis = totalmillis;
         ci->sessionid = (rnd(0x1000000)*((totalmillis%10000)+1))&0xFFFFFF;
         ci->local = true;
-        memset(&ci->_xi, 0, sizeof(_extrainfo));
 
         connects.add(ci);
         sendservinfo(ci);
@@ -2632,7 +2634,6 @@ namespace server
         ci->clientnum = ci->ownernum = n;
         ci->connectmillis = totalmillis;
         ci->sessionid = (rnd(0x1000000)*((totalmillis%10000)+1))&0xFFFFFF;
-        memset(&ci->_xi, 0, sizeof(_extrainfo));
 
         connects.add(ci);
         if(!m_mp(gamemode)) return DISC_LOCAL;
@@ -2648,6 +2649,7 @@ namespace server
         {
             if(clients[i]->authkickvictim == ci->clientnum) clients[i]->cleanauth(); 
             if(clients[i]->_xi.tkiller == ci) clients[i]->_xi.tkiller = 0;
+            if(clients[i]->_xi.votekickvictim == ci->clientnum) clients[i]->_xi.votekickvictim = -1;
         }
         if(ci->connected)
         {
@@ -3531,6 +3533,7 @@ namespace server
         _manpages.add(new _manpage("np forgive fg", "", "Forgives teamkill"));
         _manpages.add(new _manpage("interm intermission", "", "Starts intermission"));
         _manpages.add(new _manpage("ban", "cn [time]", "Bans client; time is in format: [num][ ][s/m/h/d]; by default, time is 4h; example: #ban 0 1d"));
+        _manpages.add(new _manpage("votekick", "cn", "Votes client kick"));
     }
     
     void _man(const char *cmd, const char *args, clientinfo *ci)
@@ -3544,8 +3547,10 @@ namespace server
         if(!ci) return;
         
         if(!args || !*args)
-        {           
-            copystring(msg, "\f0[HELP] \f1Possible commands:\n", MAXTRANS);
+        {
+            if(!ci) return;
+            copystring(msg, "\f0[HELP] \f1Possible commands:", MAXTRANS);
+            sendf(ci->clientnum, 1, "ris", N_SERVMSG, msg);
             for(int priv = 0; priv<=_getpriv(ci); priv++)
             {
                 first  = true;
@@ -3556,11 +3561,11 @@ namespace server
                         first = false;
                         switch(priv)
                         {
-                            case PRIV_NONE: concatstring(msg, "\f7", MAXTRANS); break;
-                            case PRIV_MASTER: case PRIV_AUTH: concatstring(msg, "\f0", MAXTRANS); break;
-                            case PRIV_ADMIN: concatstring(msg, "\f6", MAXTRANS); break;
-                            case PRIV_ROOT: concatstring(msg, "\f3", MAXTRANS); break;
-                            default: concatstring(msg, "\f1", MAXTRANS); break;
+                            case PRIV_NONE: copystring(msg, "\f7", MAXTRANS); break;
+                            case PRIV_MASTER: case PRIV_AUTH: copystring(msg, "\f0", MAXTRANS); break;
+                            case PRIV_ADMIN: copystring(msg, "\f6", MAXTRANS); break;
+                            case PRIV_ROOT: copystring(msg, "\f3", MAXTRANS); break;
+                            default: copystring(msg, "\f1", MAXTRANS); break;
                         }
                     }
                     else
@@ -3569,10 +3574,11 @@ namespace server
                     }
                     concatstring(msg, _funcs[i]->name, MAXTRANS);
                 }
-                if(!first && priv<_getpriv(ci)) concatstring(msg, "\n");
+                //if(!first && priv<_getpriv(ci)) concatstring(msg, "\n");
+                if(!first) sendf(ci->clientnum, 1, "ris", N_SERVMSG, msg);
             }
-            
-            goto _sendf;
+            return;
+            //goto _sendf;
         }
         
         if(cmd && *cmd && !strcmp(cmd, "usage")) usage = true;
@@ -3625,7 +3631,7 @@ namespace server
             }
         }
         
-        _sendf:
+        //_sendf:
             sendf(ci?ci->clientnum:-1, 1, "ris" , N_SERVMSG, msg);
     }
     
@@ -4566,6 +4572,111 @@ namespace server
         kickclients(ip, 0);
     }
 
+    struct _kickvote
+    {
+        int cn, n;
+    };
+    
+    void _checkvotekick(clientinfo *actor)
+    {
+        string msg, buf;
+        vector <_kickvote> votes;
+        votes.setsize(0);
+        int nc = numclients(-1, false);
+        static int timestat = 0;    //stats timeout
+        static int timeout = 0;     //voting timeout
+        static int timesugg = 0;    //suggestions timeout
+        if(!timeout || timeout < totalmillis)
+        {
+            timeout = totalmillis + 2*60000;    //timed out: clear all votekicks except current voter
+            loopv(clients) if(clients[i] && clients[i]!=actor) clients[i]->_xi.votekickvictim = -1;
+        }
+        if(nc < 5) return;  //dont check if less than 5 players
+        loopv(clients) if(clients[i] && clients[i]->_xi.votekickvictim >= 0)
+        {
+            int cn = clients[i]->_xi.votekickvictim;
+            clientinfo *ci = (clientinfo *)getclientinfo(cn);
+            if(!ci) //shouldnt happen, but lets be flexible xD
+            {
+                clients[i]->_xi.votekickvictim = -1;
+                continue;
+            }
+            if(ci->privilege > PRIV_MASTER && ci->privilege > clients[i]->privilege) continue;
+            bool found = false;
+            loopj(votes.length()) if(votes[j].cn == cn)
+            {
+                votes[j].n++;
+                found = true;
+                break;
+            }
+            if(found) continue;
+            _kickvote &v = votes.add();
+            v.cn = cn;
+            v.n = 1;
+        }
+        loopv(votes) if(votes[i].n >= nc/2)
+        {
+            uint ip = getclientip(votes[i].cn);
+            if(!ip) continue;
+            clientinfo *ci = (clientinfo *)getclientinfo(votes[i].cn);
+            if(ci) formatstring(msg)("\f3[votekick] \f6votekick succeded for \f7%s \f5(%i)", ci->name, votes[i].cn);
+            else formatstring(msg)("\f3[votekick] \f6votekick succeded for \f0%i", votes[i].cn);
+            sendf(-1, 1, "ris", N_SERVMSG, msg);
+            addban(ip, 4*60*60000);
+            kickclients(ip, 0);
+            votes.remove(i);
+        }
+
+        if(!timestat || timestat < totalmillis)
+        {
+            timestat = totalmillis + 2000;  //display stats each 2 voting secconds
+            formatstring(msg)("\f3[votekick]");
+            loopv(votes)
+            {
+                clientinfo *ci = (clientinfo *)getclientinfo(votes[i].cn);  // null isnt possible
+                formatstring(buf)(" \f7%s \f5(%i) \f1(\f0%i\f1)", ci->name, votes[i].cn, votes[i].n);
+                concatstring(msg, buf);
+            }
+            formatstring(buf)(" \f3(\f0%i \2needed\f3)", nc/2);
+            concatstring(msg, buf);
+            sendf(-1, 1, "ris", N_SERVMSG, msg);
+            
+            if(!timesugg || timesugg < totalmillis)
+            {
+                timesugg = totalmillis + 50000; //display suggestions each 5 voting secconds
+                sendf(-1, 1, "ris", N_SERVMSG, "\f3[votekick] \f2use \f0/kick \f2or \f0#votekick \f2to vote for kicking");
+            }
+        }
+    }
+    
+    bool _votekick(clientinfo *ci, int victim)
+    {
+        string msg;
+        if(!ci || ci->clientnum==victim) return false;
+        int priv = _getpriv(ci);
+        clientinfo *vinfo = (clientinfo *)getclientinfo(victim);
+        if(!vinfo) return false;
+        if(vinfo->privilege > PRIV_MASTER && vinfo->privilege > priv) return false;     //allow to votekick masters
+        if(ci->_xi.votekickvictim == victim) return true;
+        ci->_xi.votekickvictim = victim;
+        formatstring(msg)("\f3[votekick] \f7%s \f2voted for kicking \f7%s \f5(%i)", colorname(ci), vinfo->name, victim);
+        sendf(-1, 1, "ris", N_SERVMSG, msg);
+        _checkvotekick(ci);
+        return true;
+    }
+    
+    void _votekickfunc(const char *cmd, const char *args, clientinfo *ci)
+    {
+        int cn;
+        if(!ci) return;
+        if(!args || !*args || (!(cn = atoi(args)) && strcmp(args, "0")))
+        {
+            _man("usage", cmd, ci);
+            return;
+        }
+        if(!_votekick(ci, cn)) sendf(ci->clientnum, 1, "ris", N_SERVMSG, "\f2[FAIL] Votekick failed");
+    }
+    
     void _stats(const char *cmd, const char *args, clientinfo *ci)
     {
         vector<clientinfo *> cns;
@@ -4726,6 +4837,7 @@ namespace server
         _funcs.add(new _funcdeclaration("interm", PRIV_ADMIN, _interm));
         _funcs.add(new _funcdeclaration("intermission", PRIV_ADMIN, _interm));
         _funcs.add(new _funcdeclaration("ban", PRIV_ADMIN, _ban));
+        _funcs.add(new _funcdeclaration("votekick", 0, _votekickfunc));
     }
     
     void _privfail(clientinfo *ci)
@@ -5388,7 +5500,8 @@ namespace server
                 int victim = getint(p);
                 getstring(text, p);
                 filtertext(text, text);
-                trykick(ci, victim, text);
+                if(trykick(ci, victim, text, 0, 0, 0, true)) trykick(ci, victim, text);
+                else _votekick(ci, victim);
                 break;
             }
 
