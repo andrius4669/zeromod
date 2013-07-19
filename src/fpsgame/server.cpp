@@ -4637,7 +4637,7 @@ namespace server
                 formatstring(buf)(" \f7%s \f5(%i) \f1(\f0%i\f1)", ci->name, votes[i].cn, votes[i].n);
                 concatstring(msg, buf);
             }
-            formatstring(buf)(" \f3(\f0%i \2needed\f3)", nc/2);
+            formatstring(buf)(" \f3(\f0%i \f2needed\f3)", nc/2);
             concatstring(msg, buf);
             sendf(-1, 1, "ris", N_SERVMSG, msg);
             
