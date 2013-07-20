@@ -2223,9 +2223,12 @@ namespace server
                 
                 if(m_teammode)
                 {
-                    concatstring(msg, " teamkills: \f7", MAXTRANS);
                     _BESTSTAT(teamkills)
-                    if(besti) _printbest(best, besti, msg);
+                    if(besti)
+                    {
+                        concatstring(msg, " teamkills: \f7", MAXTRANS);
+                        _printbest(best, besti, msg);
+                    }
                 }
                 
                 concatstring(msg, " accuracy: \f7", MAXTRANS);
@@ -4657,10 +4660,12 @@ namespace server
         clientinfo *vinfo = (clientinfo *)getclientinfo(victim);
         if(!vinfo) return false;
         if(vinfo->privilege > PRIV_MASTER && vinfo->privilege > priv) return false;     //allow to votekick masters
-        if(ci->_xi.votekickvictim == victim) return true;
-        ci->_xi.votekickvictim = victim;
-        formatstring(msg)("\f3[votekick] \f7%s \f2voted for kicking \f7%s \f5(%i)", colorname(ci), vinfo->name, victim);
-        sendf(-1, 1, "ris", N_SERVMSG, msg);
+        if(ci->_xi.votekickvictim != victim)
+        {
+            ci->_xi.votekickvictim = victim;
+            formatstring(msg)("\f3[votekick] \f7%s \f2voted for kicking \f7%s \f5(%i)", colorname(ci), vinfo->name, victim);
+            sendf(-1, 1, "rxis", victim, N_SERVMSG, msg);
+        }
         _checkvotekick(ci);
         return true;
     }
@@ -4696,6 +4701,13 @@ namespace server
         {
             int cn = atoi(argv[i]);
             if(!cn && argv[i][0]!='0') continue;
+            
+            if(cn < 0)
+            {
+                cns.setsize(0);
+                loopj(clients.length()) if(clients[j]) cns.add(clients[j]);
+                break;
+            }
             
             bool exists=false;
             for(int j=0;j<cns.length();j++) if(cn==cns[j]->clientnum) exists=true;
