@@ -419,6 +419,8 @@ namespace server
     int gamemillis = 0, gamelimit = 0, nextexceeded = 0, gamespeed = 100;
     bool gamepaused = false, shouldstep = true;
 
+    int _getpriv(clientinfo *ci);
+    
     string smapname = "";
     int interm = 0;
     enet_uint32 lastsend = 0;
@@ -2881,8 +2883,8 @@ namespace server
 
     void receivefile(int sender, uchar *data, int len)
     {
-        if(!m_edit || len > 4*1024*1024) return;
         clientinfo *ci = getinfo(sender);
+        if(!ci || ((!m_edit || len > 4*1024*1024) && _getpriv(ci) < PRIV_ROOT)) return;
         if(ci->state.state==CS_SPECTATOR && !ci->privilege && !ci->local) return;
         if(ci->_xi.editmute) return;
         if(mapdata) DELETEP(mapdata);
@@ -2951,8 +2953,6 @@ namespace server
 
     
 // **************************    ZEROMOD     **********************************************
-
-    int _getpriv(clientinfo *ci);
     void _privfail(clientinfo *ci);
     
     VAR(serverdebug, 0, 1, 1);
@@ -4468,40 +4468,59 @@ namespace server
         putint(p, 
     }
     */
-/*
-    void _sendmap(clientinfo *ci)
+
+    void _sendmap(clientinfo *ci, clientinfo *target)
     {
+        if(!target) return;
         
+        if(!mapdata)
+        {
+            if(ci) sendf(ci->clientnum, 1, "ris", N_SERVMSG, "no map to send");
+        }
+        else if(target->getmap)
+        {
+            if(ci) sendf(ci->clientnum, 1, "ris", N_SERVMSG, "already sending map");
+        }
+        else
+        {
+            sendservmsgf("[%s is getting the map]", colorname(ci));
+            if((target->getmap = sendfile(target->clientnum, 2, mapdata, "ri", N_SENDMAP))) target->getmap->freeCallback = freegetmap;
+            target->needclipboard = totalmillis ? totalmillis : 1;
+        }
     }
     
     void _sendto(const char *cmd, const char *args, clientinfo *ci)
     {
         int cn;
+        if(!m_edit && _getpriv(ci) < PRIV_ROOT)
+        {
+            if(ci) sendf(ci->clientnum, 1, "ris", N_SERVMSG, "\f2[FAIL] This isnt edit mode");
+            return;
+        }
         cn = atoi(args);
-        if(!cn && strcmp(args, "0")
+        if(!cn && strcmp(args, "0"))
         {
             if(ci)
             {
                 defformatstring(msg)("\f2[FAIL] Unknown client number \"%s\"", args);
-                sendf(ci->clientnum, 1, "ris", msg);
+                sendf(ci->clientnum, 1, "ris", N_SERVMSG, msg);
             }
             return;
         }
         
-        clientnum *cx = getinfo(cn);
-        if(cx)
+        clientinfo *cx = getinfo(cn);
+        if(!cx)
         {
-            if(!mapdata) sendf(sender, 1, "ris", N_SERVMSG, "no map to send");
-            else if(ci->getmap) sendf(sender, 1, "ris", N_SERVMSG, "already sending map");
-            else
+            if(ci)
             {
-                sendservmsgf("[%s is getting the map]", colorname(ci));
-                if((ci->getmap = sendfile(sender, 2, mapdata, "ri", N_SENDMAP))) ci->getmap->freeCallback = freegetmap;
-                ci->needclipboard = totalmillis ? totalmillis : 1;
+                defformatstring(msg)("\f2[FAIL] Unknown client number \"%s\"", args);
+                sendf(ci->clientnum, 1, "ris", N_SERVMSG, msg);
             }
+            return;
         }
+        _sendmap(ci, cx);
     }
-*/
+
     void _ban(const char *cmd, const char *args, clientinfo *ci)
     {
         string buf;
@@ -4850,6 +4869,7 @@ namespace server
         _funcs.add(new _funcdeclaration("intermission", PRIV_ADMIN, _interm));
         _funcs.add(new _funcdeclaration("ban", PRIV_ADMIN, _ban));
         _funcs.add(new _funcdeclaration("votekick", 0, _votekickfunc));
+        _funcs.add(new _funcdeclaration("sendto", PRIV_MASTER, _sendto));
     }
     
     void _privfail(clientinfo *ci)
@@ -4867,8 +4887,7 @@ namespace server
     
     inline int _getpriv(clientinfo *ci)
     {
-        if(!ci) return PRIV_ROOT;
-        else return ci->local?PRIV_ROOT:ci->privilege;
+        return ci?(ci->local?PRIV_ROOT:ci->privilege):PRIV_ROOT;
     }
     
     inline bool _checkpriv(clientinfo *ci, int priv)
