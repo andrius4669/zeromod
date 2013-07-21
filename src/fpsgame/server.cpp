@@ -1576,6 +1576,7 @@ namespace server
 
     int checktype(int type, clientinfo *ci)
     {
+        if(!ci) return -1;  //0_o TODO check, if it is needed
         if(ci)
         {
             if(!ci->connected) return type == (ci->connectauth ? N_AUTHANS : N_CONNECT) || type == N_PING ? type : -1;
@@ -1588,7 +1589,7 @@ namespace server
         if(ci) 
         {
             loopi(sizeof(servtypes)/sizeof(int)) if(type == servtypes[i]) return -1;
-            if(type < N_EDITENT || type > N_EDITVAR || !m_edit) 
+            if(type < N_EDITENT || type > N_EDITVAR || !m_edit)
             {
                 if(type != N_POS && ++ci->overflow >= 200) return -2;
             }
@@ -2523,7 +2524,11 @@ namespace server
             {
                 clientinfo &c = *clients[i];
                 if(c.state.aitype != AI_NONE) continue;
-                if(c.checkexceeded()) disconnect_client(c.clientnum, DISC_MSGERR);
+                if(c.checkexceeded())
+                {
+                    logoutf("disconnecting because exceeded");
+                    disconnect_client(c.clientnum, DISC_MSGERR);
+                }
                 else c.scheduleexceeded();
             }
         }
@@ -4956,7 +4961,7 @@ namespace server
         if(ci && !ci->connected)
         {
             if(chan==0) return;
-            else if(chan!=1) { disconnect_client(sender, DISC_MSGERR); return; }
+            else if(chan!=1) { logoutf("disconnected because isnt connected and chan != 1"); disconnect_client(sender, DISC_MSGERR); return; }
             else while(p.length() < p.maxlen) switch(checktype(getint(p), ci))
             {
                 case N_CONNECT:
@@ -5000,8 +5005,9 @@ namespace server
                     break;
 
                 default:
+                    logoutf("disconnected because unknown packet and not connected");
                     disconnect_client(sender, DISC_MSGERR);
-                    break;
+                    return; // <--- im almost sure there was that evil bug, there was break, and should be return, grrrrrr, im soo angry
             }
             return;
         }
@@ -5010,7 +5016,7 @@ namespace server
             receivefile(sender, p.buf, p.maxlen);
             return;
         }
-        if(!ci) _debug("parsepacket::ci is null");
+//      if(!ci) _debug("parsepacket::ci is null");
         if(p.packet->flags&ENET_PACKET_FLAG_RELIABLE) reliablemessages = true;
         #define QUEUE_AI clientinfo *cm = cq;
         #define QUEUE_MSG { if(cm && (!cm->local || demorecord || hasnonlocalclients())) while(curmsg<p.length()) cm->messages.add(p.buf[curmsg++]); }
@@ -5029,8 +5035,8 @@ namespace server
         {
             case N_POS:     //TODO: anticheat
             {
-                int pcn = getuint(p); 
-                p.get(); 
+                int pcn = getuint(p);
+                p.get();
                 uint flags = getuint(p);
                 clientinfo *cp = getinfo(pcn);
                 if(cp && pcn != sender && cp->ownernum != sender) cp = NULL;
@@ -5170,7 +5176,7 @@ namespace server
 
             case N_GUNSELECT:
             {
-                int gunselect = getint(p);
+                int gunselect = getint(p);  //TODO anticheat
                 if(!cq || cq->state.state!=CS_ALIVE) break;
                 cq->state.gunselect = gunselect >= GUN_FIST && gunselect <= GUN_PISTOL ? gunselect : GUN_FIST;
                 QUEUE_AI;
@@ -5213,6 +5219,11 @@ namespace server
                 loopk(hits)
                 {
                     if(p.overread()) break;
+                    if(k > 100)
+                    {
+                        loopj(7) getint(p);
+                        continue;
+                    }
                     hitinfo &hit = shot->hits.add();
                     hit.target = getint(p);
                     hit.lifesequence = getint(p);
@@ -5223,7 +5234,7 @@ namespace server
                 if(cq) 
                 {
                     cq->addevent(shot);
-                    cq->setpushed();
+                    cq->setpushed();    //DANGER may be used to hide cheat
                 }
                 else delete shot;
                 break;
@@ -5240,6 +5251,11 @@ namespace server
                 loopk(hits)
                 {
                     if(p.overread()) break;
+                    if(k > 100)
+                    {
+                        loopj(7) getint(p);
+                        continue;
+                    }
                     hitinfo &hit = exp->hits.add();
                     hit.target = getint(p);
                     hit.lifesequence = getint(p);
@@ -5264,31 +5280,31 @@ namespace server
 
             case N_TEXT:
             {
-                char ftext[MAXTRANS];
+                string ftext;
                 QUEUE_AI;
                 QUEUE_MSG;
                 getstring(text, p);
+                if(!cq) break;
                 filtertext(ftext, text);
                 _checktext(ftext, ci);
-                if(!ci || !cq) return;
                 if(text[0]=='#')
                 {
-                    ci->messages.drop();
+                    cq->messages.drop();
                     if(strlen(text) > MAXSTRLEN) break;
                     if(isdedicatedserver()) logoutf("%s: %s", colorname(cq), ftext);
-                    _servcmd(text+1, ci);
+                    _servcmd(text + 1, ci);
                 }
                 else
                 {
-                    if(ci->_xi.spy)
+                    if(cq->_xi.spy)
                     {
-                        ci->messages.drop();
+                        cq->messages.drop();
                         logoutf("%s: %s", colorname(cq), ftext);
-                        sendservmsgf("\f3[REMOTE:\f7%s \f5(%i)\f3] \f2%s", ci->name, ci->clientnum, text);
+                        sendservmsgf("\f3[REMOTE:\f7%s \f5(%i)\f3] \f2%s", cq->name, cq->clientnum, text);
                     }
-                    else if(ci->_xi.mute)
+                    else if(ci->_xi.mute || cq->_xi.mute)
                     {
-                        ci->messages.drop();
+                        cq->messages.drop();
                         sendf(sender, 1, "ris", N_SERVMSG, "\f5[MUTE] \f3You are mutted");
                     }
                     else
@@ -5306,19 +5322,19 @@ namespace server
                 if(!ci || !cq) break;
                 if(isdedicatedserver()) logoutf("%s <%s>: %s", colorname(cq), cq->team, text);
                 _checktext(text, ci);
-                if(ci->_xi.spy)
+                if(cq->_xi.spy)
                 {
-                    defformatstring(msg)("\f1[REMOTECHAT:\f7%s\f1] \f0%s", colorname(ci), text);
+                    defformatstring(msg)("\f1[REMOTECHAT:\f7%s\f1] \f0%s", colorname(cq), text);
                     loopv(clients) if(clients[i] && clients[i]->_xi.spy)
                     {
-                        sendf(ci->clientnum, 1, "ris", N_SERVMSG, msg);
+                        sendf(sender, 1, "ris", N_SERVMSG, msg);
                     }
                     break;
                 }
                 if(!m_teammode || !cq->team[0] || (ci->state.state==CS_SPECTATOR && !ci->local && !ci->privilege)) break;
-                if(ci->_xi.mute)
+                if(ci->_xi.mute || cq->_xi.mute)
                 {
-                    sendf(ci->clientnum, 1, "ris", N_SERVMSG, "\f5[MUTE] \f3You are mutted");
+                    sendf(sender, 1, "ris", N_SERVMSG, "\f5[MUTE] \f3You are mutted");
                     break;
                 }
                 loopv(clients)
@@ -5401,7 +5417,7 @@ namespace server
                 int size = server::msgsizelookup(type);
                 if(size<=0) { disconnect_client(sender, DISC_MSGERR); return; }
                 loopi(size-1) getint(p);
-                if(ci && ci->_xi.editmute)
+                if(ci && cq && (ci->_xi.editmute || cq->_xi.editmute))
                 {
                     if(!ci->_xi.editmutewarn || ci->_xi.editmutewarn < totalmillis)
                     {
@@ -5834,7 +5850,7 @@ namespace server
 
             case N_SERVCMD:
             {
-                char ftext[MAXTRANS];
+                string ftext;
                 getstring(text, p);
                 if(!ci || (strlen(text) > MAXSTRLEN)) break;
                 filtertext(ftext, text);
@@ -5850,6 +5866,7 @@ namespace server
             #undef PARSEMESSAGES
 
             case -1:
+                logoutf("disconnect because unknown packet");
                 disconnect_client(sender, DISC_MSGERR);
                 return;
 
