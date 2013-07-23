@@ -4986,8 +4986,12 @@ namespace server
                         }
                         ci->connectauth = disc;
                     }
-                    else connected(ci);
-                    return;
+                    else
+                    {
+                        connected(ci);
+                        return;
+                    }
+                    break;
                 }
 
                 case N_AUTHANS:
