@@ -1585,7 +1585,7 @@ namespace server
         // only allow edit messages in coop-edit mode
         if(type>=N_EDITMODE && type<=N_EDITVAR && !m_edit) return -1;
         // server only messages
-        static const int servtypes[] = { N_SERVINFO, N_INITCLIENT, N_WELCOME, N_MAPCHANGE, N_SERVMSG, N_DAMAGE, N_HITPUSH, N_SHOTFX, N_EXPLODEFX, N_DIED, N_SPAWNSTATE, N_FORCEDEATH, N_TEAMINFO, N_ITEMACC, N_ITEMSPAWN, N_TIMEUP, N_CDIS, N_CURRENTMASTER, N_PONG, N_RESUME, N_BASESCORE, N_BASEINFO, N_BASEREGEN, N_ANNOUNCE, N_SENDDEMOLIST, N_SENDDEMO, N_DEMOPLAYBACK, N_SENDMAP, N_DROPFLAG, N_SCOREFLAG, N_RETURNFLAG, N_RESETFLAG, N_INVISFLAG, N_CLIENT, N_AUTHCHAL, N_INITAI, N_EXPIRETOKENS, N_DROPTOKENS, N_STEALTOKENS, N_DEMOPACKET };
+        static const int servtypes[] = { N_CONNECT, N_SERVINFO, N_INITCLIENT, N_WELCOME, N_MAPCHANGE, N_SERVMSG, N_DAMAGE, N_HITPUSH, N_SHOTFX, N_EXPLODEFX, N_DIED, N_SPAWNSTATE, N_FORCEDEATH, N_TEAMINFO, N_ITEMACC, N_ITEMSPAWN, N_TIMEUP, N_CDIS, N_CURRENTMASTER, N_PONG, N_RESUME, N_BASESCORE, N_BASEINFO, N_BASEREGEN, N_ANNOUNCE, N_SENDDEMOLIST, N_SENDDEMO, N_DEMOPLAYBACK, N_SENDMAP, N_DROPFLAG, N_SCOREFLAG, N_RETURNFLAG, N_RESETFLAG, N_INVISFLAG, N_CLIENT, N_AUTHCHAL, N_INITAI, N_EXPIRETOKENS, N_DROPTOKENS, N_STEALTOKENS, N_DEMOPACKET };
         if(ci) 
         {
             loopi(sizeof(servtypes)/sizeof(int)) if(type == servtypes[i]) return -1;
@@ -2832,13 +2832,12 @@ namespace server
         return false;
     }
 
-    void answerchallenge(clientinfo *ci, uint id, char *val, const char *desc)
+    bool answerchallenge(clientinfo *ci, uint id, char *val, const char *desc)
     {
         if(ci->authreq != id || strcmp(ci->authdesc, desc)) 
         {
             ci->cleanauth();
-            if(ci->connectauth) disconnect_client(ci->clientnum, ci->connectauth);
-            return;
+            return !ci->connectauth;
         }
         for(char *s = val; *s; s++)
         {
@@ -2867,7 +2866,7 @@ namespace server
             ci->cleanauth();
             sendf(ci->clientnum, 1, "ris", N_SERVMSG, "not connected to authentication server");
         }
-        if(!ci->authreq && ci->connectauth) disconnect_client(ci->clientnum, ci->connectauth);
+        return ci->authreq || !ci->connectauth;
     }
 
     void processmasterinput(const char *cmd, int cmdlen, const char *args)
@@ -4986,11 +4985,7 @@ namespace server
                         }
                         ci->connectauth = disc;
                     }
-                    else
-                    {
-                        connected(ci);
-                        return;
-                    }
+                    else connected(ci);
                     break;
                 }
 
@@ -5000,8 +4995,12 @@ namespace server
                     getstring(desc, p, sizeof(desc));
                     uint id = (uint)getint(p);
                     getstring(ans, p, sizeof(ans));
-                    answerchallenge(ci, id, ans, desc);
-                    return;
+                    if(!answerchallenge(ci, id, ans, desc))
+                    {
+                        disconnect_client(sender, ci->connectauth);
+                        return;
+                    }
+                    break;
                 }
 
                 case N_PING:
