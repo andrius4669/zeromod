@@ -4987,7 +4987,7 @@ namespace server
                         ci->connectauth = disc;
                     }
                     else connected(ci);
-                    break;
+                    return;
                 }
 
                 case N_AUTHANS:
@@ -4997,7 +4997,7 @@ namespace server
                     uint id = (uint)getint(p);
                     getstring(ans, p, sizeof(ans));
                     answerchallenge(ci, id, ans, desc);
-                    break;
+                    return;
                 }
 
                 case N_PING:
@@ -5007,7 +5007,7 @@ namespace server
                 default:
                     logoutf("disconnected because unknown packet and not connected");
                     disconnect_client(sender, DISC_MSGERR);
-                    return; // <--- im almost sure there was that evil bug, there was break, and should be return, grrrrrr, im soo angry
+                    return;
             }
             return;
         }
