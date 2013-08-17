@@ -69,12 +69,12 @@ int on_connect(struct hookparam *hp)
     if(country && country[0]) sprintf(connmsg, "\f5[GeoIP] \f7%s \f2is connected from \f0%s \f5[%s]", name, country, ipaddr);
     else sprintf(connmsg, "\f5[GeoIP] \f7%s \f2is connected from \f4Unknown \f5[%s]", name, ipaddr);
     
-    notifypriv(connmsg, PRIV_AUTH, PRIV_ROOT);
+    notifypriv(connmsg, PRIV_ADMIN, PRIV_ROOT);
     
     if(!country || !country[0]) return 0;
     
     sprintf(connmsg, "\f5[GeoIP] \f7%s \f2is connected from \f0%s", name, country);
-    notifypriv(connmsg, PRIV_NONE, PRIV_MASTER);
+    notifypriv(connmsg, PRIV_NONE, PRIV_AUTH);
     
     return 0;
 }

@@ -6,6 +6,7 @@
 #define LOGSTRLEN 512
 
 static FILE *logfile = NULL;
+volatile bool reloadcfg = false;
 
 void closelogfile()
 {
@@ -45,7 +46,6 @@ void logoutf(const char *fmt, ...)
     va_end(args);
 }
 
-
 static void writelog(FILE *file, const char *buf)
 {
     static uchar ubuf[512];
@@ -65,7 +65,6 @@ static void writelogv(FILE *file, const char *fmt, va_list args)
     writelog(file, buf);
 }
  
-#ifdef STANDALONE
 void fatal(const char *fmt, ...) 
 { 
     void cleanupserver();
@@ -104,7 +103,6 @@ void conoutf(int type, const char *fmt, ...)
     conoutfv(type, fmt, args);
     va_end(args);
 }
-#endif
 
 enum { ST_EMPTY, ST_LOCAL, ST_TCPIP };
 
@@ -205,12 +203,6 @@ void sendpacket(int n, int chan, ENetPacket *packet, int exclude)
             enet_peer_send(clients[n]->peer, chan, packet);
             break;
         }
-
-#ifndef STANDALONE
-        case ST_LOCAL:
-            localservertoclient(chan, packet);
-            break;
-#endif
     }
 }
 
@@ -264,12 +256,7 @@ ENetPacket *sendf(int cn, int chan, const char *format, ...)
 
 ENetPacket *sendfile(int cn, int chan, stream *file, const char *format, ...)
 {
-    if(cn < 0)
-    {
-#ifdef STANDALONE
-        return NULL;
-#endif
-    }
+    if(cn < 0) return NULL;
     else if(!clients.inrange(cn)) return NULL;
 
     int len = (int)min(file->size(), stream::offset(INT_MAX));
@@ -295,10 +282,7 @@ ENetPacket *sendfile(int cn, int chan, stream *file, const char *format, ...)
     file->read(p.subbuf(len).buf, len);
 
     ENetPacket *packet = p.finalize();
-    if(cn >= 0) sendpacket(cn, chan, packet, -1);
-#ifndef STANDALONE
-    else sendclientpacket(packet, chan);
-#endif
+    sendpacket(cn, chan, packet, -1);
     return packet->referenceCount > 0 ? packet : NULL;
 }
 
@@ -357,7 +341,6 @@ void localclienttoserver(int chan, ENetPacket *packet)
     if(c) process(packet, c->num, chan);
 }
 
-#ifdef STANDALONE
 bool resolverwait(const char *name, ENetAddress *address)
 {
     return enet_address_set_host(address, name) >= 0;
@@ -369,7 +352,6 @@ int connectwithtimeout(ENetSocket sock, const char *hostname, const ENetAddress 
     if(result<0) enet_socket_destroy(sock);
     return result;
 }
-#endif
 
 ENetSocket mastersock = ENET_SOCKET_NULL;
 ENetAddress masteraddress = { ENET_HOST_ANY, ENET_PORT_ANY }, serveraddress = { ENET_HOST_ANY, ENET_PORT_ANY };
@@ -405,9 +387,7 @@ ENetSocket connectmaster()
 
     if(masteraddress.host == ENET_HOST_ANY)
     {
-#ifdef STANDALONE
         logoutf("looking up %s...", mastername);
-#endif
         masteraddress.port = masterport;
         if(!resolverwait(mastername, &masteraddress)) return ENET_SOCKET_NULL;
     }
@@ -419,9 +399,7 @@ ENetSocket connectmaster()
     }
     if(sock == ENET_SOCKET_NULL || connectwithtimeout(sock, mastername, masteraddress) < 0) 
     {
-#ifdef STANDALONE
         logoutf(sock==ENET_SOCKET_NULL ? "could not open socket" : "could not connect"); 
-#endif
         return ENET_SOCKET_NULL;
     }
     
@@ -570,9 +548,7 @@ VAR(serveruprate, 0, 0, INT_MAX);
 SVAR(serverip, "");
 VARF(serverport, 0, server::serverport(), 0xFFFF, { if(!serverport) serverport = server::serverport(); });
 
-#ifdef STANDALONE
 int curtime = 0, lastmillis = 0, totalmillis = 0;
-#endif
 
 void updatemasterserver()
 {
@@ -604,18 +580,16 @@ void serverslice(bool dedicated, uint timeout)   // main server update, called f
        
     // below is network only
 
-    if(dedicated) 
-    {
-        int millis = (int)enet_time_get(), elapsed = millis - totalmillis;
-        static int timeerr = 0;
-        int scaledtime = server::scaletime(elapsed) + timeerr;
-        curtime = scaledtime/100;
-        timeerr = scaledtime%100;
-        if(server::ispaused()) curtime = 0;
-        lastmillis += curtime;
-        totalmillis = millis;
-        updatetime();
-    }
+    int millis = (int)enet_time_get(), elapsed = millis - totalmillis;
+    static int timeerr = 0;
+    int scaledtime = server::scaletime(elapsed) + timeerr;
+    curtime = scaledtime/100;
+    timeerr = scaledtime%100;
+    if(server::ispaused()) curtime = 0;
+    lastmillis += curtime;
+    totalmillis = millis;
+    updatetime();
+
     server::serverupdate();
 
     flushmasteroutput();
@@ -681,30 +655,6 @@ void flushserver(bool force)
 {
     if(server::sendpackets(force) && serverhost) enet_host_flush(serverhost);
 }
-
-#ifndef STANDALONE
-void localdisconnect(bool cleanup)
-{
-    bool disconnected = false;
-    loopv(clients) if(clients[i]->type==ST_LOCAL) 
-    {
-        server::localdisconnect(i);
-        delclient(clients[i]);
-        disconnected = true;
-    }
-    if(!disconnected) return;
-    game::gamedisconnect(cleanup);
-    mainmenu = 1;
-}
-
-void localconnect()
-{
-    client &c = addclient(ST_LOCAL);
-    copystring(c.hostname, "local");
-    game::gameconnect(false);
-    server::localconnect(c.num);
-}
-#endif
 
 #ifdef WIN32
 #include "shellapi.h"
@@ -827,7 +777,8 @@ enum
 	MENU_OPENCONSOLE = 0,
 	MENU_SHOWCONSOLE,
 	MENU_HIDECONSOLE,
-	MENU_EXIT
+	MENU_EXIT,
+    MENU_RELOADCFG
 };
 
 static LRESULT CALLBACK handlemessages(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
@@ -869,6 +820,9 @@ static LRESULT CALLBACK handlemessages(HWND hWnd, UINT uMsg, WPARAM wParam, LPAR
 				case MENU_EXIT:
 					PostMessage(hWnd, WM_CLOSE, 0, 0);
 					break;
+                case MENU_RELOADCFG:
+                    reloadcfg = true;
+                    break;
 			}
 			return 0;
 		case WM_CLOSE:
@@ -889,6 +843,7 @@ static void setupwindow(const char *title)
 	appmenu = CreatePopupMenu();
 	if(!appmenu) fatal("failed creating popup menu");
     AppendMenu(appmenu, MF_STRING, MENU_OPENCONSOLE, "Open Console");
+    AppendMenu(appmenu, MF_STRING, MENU_RELOADCFG, "Reload configuration");
     AppendMenu(appmenu, MF_SEPARATOR, 0, NULL);
 	AppendMenu(appmenu, MF_STRING, MENU_EXIT, "Exit");
 	//SetMenuDefaultItem(appmenu, 0, FALSE);
@@ -941,14 +896,9 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR szCmdLine, int sw)
     vector<char *> args;
     char *buf = parsecommandline(GetCommandLine(), args);
 	appinstance = hInst;
-#ifdef STANDALONE
     int standalonemain(int argc, char **argv);
     int status = standalonemain(args.length()-1, args.getbuf());
     #define main standalonemain
-#else
-    SDL_SetModuleHandle(hInst);
-    int status = SDL_main(args.length()-1, args.getbuf());
-#endif
     delete[] buf;
     exit(status);
     return 0;
@@ -971,21 +921,25 @@ void logoutfv(const char *fmt, va_list args)
 
 #else
 
+#include <signal.h>
+
 void logoutfv(const char *fmt, va_list args)
 {
     FILE *f = getlogfile();
     if(f) writelogv(f, fmt, args);
 }
 
+void reloadsignal(int signum)
+{
+    reloadcfg = true;
+}
+
 #endif
 
-static bool dedicatedserver = false;
-
-bool isdedicatedserver() { return dedicatedserver; }
+bool isdedicatedserver() { return true; }
 
 void rundedicatedserver()
 {
-    dedicatedserver = true;
     logoutf("dedicated server started, waiting for clients...");
 #ifdef WIN32
     SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS);
@@ -1001,26 +955,27 @@ void rundedicatedserver()
 		serverslice(true, 5);
 	}
 #else
-    for(;;) serverslice(true, 5);
+    signal(SIGUSR1, reloadsignal);
+    for(;;)
+    {
+        serverslice(true, 5);
+        if(reloadcfg)
+        {
+            logoutf("reloading server configuration");
+            execfile("server-init.cfg", false);
+            reloadcfg = false;
+        }
+    }
 #endif
-    dedicatedserver = false;
 }
 
-bool servererror(bool dedicated, const char *desc)
+bool servererror(const char *desc)
 {
-#ifndef STANDALONE
-    if(!dedicated)
-    {
-        conoutf(CON_ERROR, "%s", desc);
-        cleanupserver();
-    }
-    else
-#endif
-        fatal("%s", desc);
+    fatal("%s", desc);
     return false;
 }
   
-bool setuplistenserver(bool dedicated)
+bool setuplistenserver(void)
 {
     ENetAddress address = { ENET_HOST_ANY, enet_uint16(serverport <= 0 ? server::serverport() : serverport) };
     if(*serverip)
@@ -1028,8 +983,8 @@ bool setuplistenserver(bool dedicated)
         if(enet_address_set_host(&address, serverip)<0) conoutf(CON_WARN, "WARNING: server ip not resolved");
         else serveraddress.host = address.host;
     }
-    serverhost = enet_host_create(&address, min(maxclients + server::reserveclients(), MAXCLIENTS), server::numchannels(), 0, serveruprate);
-    if(!serverhost) return servererror(dedicated, "could not create server host");
+    serverhost = enet_host_create(&address, min(maxclients + server::reserveclients(), MAXCLIENTS*2), server::numchannels(), 0, serveruprate);
+    if(!serverhost) return servererror("could not create server host");
     loopi(maxclients) serverhost->peers[i].data = NULL;
     address.port = server::serverinfoport(serverport > 0 ? serverport : -1);
     pongsock = enet_socket_create(ENET_SOCKET_TYPE_DATAGRAM);
@@ -1038,7 +993,7 @@ bool setuplistenserver(bool dedicated)
         enet_socket_destroy(pongsock);
         pongsock = ENET_SOCKET_NULL;
     }
-    if(pongsock == ENET_SOCKET_NULL) return servererror(dedicated, "could not create server info socket");
+    if(pongsock == ENET_SOCKET_NULL) return servererror("could not create server info socket");
     else enet_socket_set_option(pongsock, ENET_SOCKOPT_NONBLOCK, 1);
     address.port = server::laninfoport();
     lansock = enet_socket_create(ENET_SOCKET_TYPE_DATAGRAM);
@@ -1052,58 +1007,21 @@ bool setuplistenserver(bool dedicated)
     return true;
 }
 
-void initserver(bool listen, bool dedicated)
+void initserver(void)
 {
-    if(dedicated) 
-    {
 #ifdef WIN32
-        setupwindow("Cube 2: Sauerbraten server");
+    setupwindow("Cube 2: Sauerbraten server");
 #endif
-    }
-    
-    execfile("server-init.cfg", false);
 
-    if(listen) setuplistenserver(dedicated);
+    execfile("server-init.cfg", false);
+    
+    setuplistenserver();
 
     server::serverinit();
 
-    if(listen)
-    {
-        updatemasterserver();
-        if(dedicated) rundedicatedserver(); // never returns
-#ifndef STANDALONE
-        else conoutf("listen server started");
-#endif
-    }
-}
-
-#ifndef STANDALONE
-void startlistenserver(int *usemaster)
-{
-    if(serverhost) { conoutf(CON_ERROR, "listen server is already running"); return; }
-
-    allowupdatemaster = *usemaster>0 ? 1 : 0;
- 
-    if(!setuplistenserver(false)) return;
-    
     updatemasterserver();
-   
-    conoutf("listen server started for %d clients%s", maxclients, allowupdatemaster ? " and listed with master server" : ""); 
+    rundedicatedserver(); // never returns
 }
-COMMAND(startlistenserver, "i");
-
-void stoplistenserver()
-{
-    if(!serverhost) { conoutf(CON_ERROR, "listen server is not running"); return; }
-
-    kicknonlocalclients();
-    enet_host_flush(serverhost);
-    cleanupserver();
-
-    conoutf("listen server stopped");
-}
-COMMAND(stoplistenserver, "");
-#endif
 
 bool serveroption(char *opt)
 {
@@ -1114,18 +1032,15 @@ bool serveroption(char *opt)
         case 'i': setsvar("serverip", opt+2); return true;
         case 'j': setvar("serverport", atoi(opt+2)); return true; 
         case 'm': setsvar("mastername", opt+2); setvar("updatemaster", mastername[0] ? 1 : 0); return true;
-#ifdef STANDALONE
         case 'q': logoutf("Using home directory: %s", opt); sethomedir(opt+2); return true;
         case 'k': logoutf("Adding package directory: %s", opt); addpackagedir(opt+2); return true;
         case 'g': logoutf("Setting log file: %s", opt); setlogfile(opt+2); return true;
-#endif
         default: return false;
     }
 }
 
 vector<const char *> gameargs;
 
-#ifdef STANDALONE
 int main(int argc, char **argv)
 {   
     setlogfile(NULL);
@@ -1134,7 +1049,6 @@ int main(int argc, char **argv)
     enet_time_set(0);
     for(int i = 1; i<argc; i++) if(argv[i][0]!='-' || !serveroption(argv[i])) gameargs.add(argv[i]);
     game::parseoptions(gameargs);
-    initserver(true, true);
+    initserver();
     return EXIT_SUCCESS;
 }
-#endif

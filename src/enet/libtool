@@ -2,7 +2,7 @@
 
 # libtool - Provide generalized library-building support services.
 # Generated automatically by config.status (libenet) 1.3.6
-# Libtool was configured on host zero:
+# Libtool was configured on host archzero:
 # NOTE: Changes made to this file will be lost: look at ltmain.sh.
 #
 #   Copyright (C) 1996, 1997, 1998, 1999, 2000, 2001, 2003, 2004, 2005,
@@ -66,12 +66,12 @@ PATH_SEPARATOR=":"
 
 # The host system.
 host_alias=
-host=i686-pc-linux-gnu
+host=x86_64-unknown-linux-gnu
 host_os=linux-gnu
 
 # The build system.
 build_alias=
-build=i686-pc-linux-gnu
+build=x86_64-unknown-linux-gnu
 build_os=linux-gnu
 
 # A sed program that does not truncate output.
@@ -272,10 +272,10 @@ finish_eval=""
 hardcode_into_libs=yes
 
 # Compile-time system search path for libraries.
-sys_lib_search_path_spec="/usr/lib/gcc/i686-pc-linux-gnu/4.8.1 /usr/lib /lib "
+sys_lib_search_path_spec="/usr/lib/gcc/x86_64-unknown-linux-gnu/4.8.1 /usr/lib /lib "
 
 # Run-time system search path for libraries.
-sys_lib_dlsearch_path_spec="/lib /usr/lib /usr/lib/libfakeroot/fakechroot/ /usr/lib/libfakeroot "
+sys_lib_dlsearch_path_spec="/lib /usr/lib /usr/lib/libfakeroot /usr/lib/ /usr/lib/ffmpeg-compat/ /usr/lib32/libfakeroot /usr/lib32 "
 
 # Whether dlopen is supported.
 dlopen_support=unknown
@@ -292,7 +292,7 @@ striplib="strip --strip-unneeded"
 
 
 # The linker used to build libraries.
-LD="/usr/bin/ld"
+LD="/usr/bin/ld -m elf_x86_64"
 
 # How to create reloadable object files.
 reload_flag=" -r"
