@@ -3530,7 +3530,7 @@ namespace server
         _manpages.add(new _manpage("unspec unspectate", "[cn]", "Unspectates one or all players"));
         _manpages.add(new _manpage("stats", "[cn]", "Gives stats of you or another user"));
         _manpages.add(new _manpage("pm", "<cn>[,cn,...] <message>", "Sends message to specified client numbers"));
-        _manpages.add(new _manpage("editmute", "[cn]", "Mutes one or all players editing"));
+        _manpages.add(new _manpage("editmute", "[cn] [1/0]", "Mutes one or all players editing"));
         _manpages.add(new _manpage("editunmute", "[cn]", "Unmutes one or all players editing"));
         _manpages.add(new _manpage("load", "<module>", "Loads specified module"));
         _manpages.add(new _manpage("reload", "<module>", "Reloads specified module"));
@@ -3774,8 +3774,12 @@ namespace server
         if(!args || !*args) _editmute(0, val);
         else
         {
-            int cn = atoi(args);
-            if(!cn && strcmp(args, "0"))
+            string buf;
+	    char *argv[2];
+	    copystring(buf, args);
+	    _argsep(buf, 2, argv);
+            int cn = atoi(argv[0]);
+            if(!cn && strcmp(argv[0], "0"))
             {
                 _man("usage", cmd, ci);
                 return;
@@ -3787,6 +3791,7 @@ namespace server
                 _notify(msg, ci);
                 return;
             }
+            if(argv[1] && *argv[1] && !strcmp(argv[1], "0")) val = 0;
             _editmute(cx, val);
         }
     }
@@ -5328,13 +5333,13 @@ namespace server
                 if(cq->_xi.spy)
                 {
                     defformatstring(msg)("\f1[REMOTECHAT:\f7%s\f1] \f0%s", colorname(cq), text);
-                    loopv(clients) if(clients[i] && clients[i]->_xi.spy)
+                    loopv(clients) if(clients[i]->_xi.spy)
                     {
-                        sendf(sender, 1, "ris", N_SERVMSG, msg);
+                        sendf(clients[i]->clientnum, 1, "ris", N_SERVMSG, msg);
                     }
                     break;
                 }
-                if(!m_teammode || !cq->team[0] || (ci->state.state==CS_SPECTATOR && !ci->local && !ci->privilege)) break;
+                //if(!m_teammode || !cq->team[0] || (ci->state.state==CS_SPECTATOR && !ci->local && !ci->privilege)) break;
                 if(ci->_xi.mute || cq->_xi.mute)
                 {
                     sendf(sender, 1, "ris", N_SERVMSG, "\f5[MUTE] \f3You are mutted");
@@ -5343,7 +5348,10 @@ namespace server
                 loopv(clients)
                 {
                     clientinfo *t = clients[i];
-                    if(t==cq || t->state.state==CS_SPECTATOR || t->state.aitype != AI_NONE || strcmp(cq->team, t->team)) continue;
+                    //if(t==cq || t->state.state==CS_SPECTATOR || t->state.aitype != AI_NONE || strcmp(cq->team, t->team)) continue;
+                    if(t==cq || t->state.aitype != AI_NONE) continue;
+                    if((cq->state.state==CS_SPECTATOR) != (t->state.state==CS_SPECTATOR)) continue;
+                    if(m_teammode && strcmp(cq->team, t->team)) continue;
                     sendf(t->clientnum, 1, "riis", N_SAYTEAM, cq->clientnum, text);
                 }
                 break;
