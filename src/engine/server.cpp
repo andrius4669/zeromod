@@ -1010,7 +1010,7 @@ bool setuplistenserver(void)
 void initserver(void)
 {
 #ifdef WIN32
-    setupwindow("Cube 2: Sauerbraten server");
+    setupwindow("Cube 2: Sauerbraten server (zeromod)");
 #endif
 
     execfile("server-init.cfg", false);

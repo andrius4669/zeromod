@@ -1626,7 +1626,7 @@ namespace server
 
     void flushclientposition(clientinfo &ci)
     {
-        if(ci.position.empty()) return;
+        if(ci.position.empty() || (!hasnonlocalclients() && !demorecord)) return;
         packetbuf p(ci.position.length(), 0);
         p.put(ci.position.getbuf(), ci.position.length());
         ci.position.setsize(0);
@@ -1750,7 +1750,7 @@ namespace server
 
     bool sendpackets(bool force)
     {
-        if(clients.empty()) return false;
+        if(clients.empty() || (!hasnonlocalclients() && !demorecord)) return false;
         enet_uint32 curtime = enet_time_get()-lastsend;
         if(curtime<33 && !force) return false;
         bool flush = buildworldstate();
@@ -2138,7 +2138,7 @@ namespace server
     void vote(const char *map, int reqmode, int sender)
     {
         clientinfo *ci = getinfo(sender);
-        if(!ci || (ci->state.state==CS_SPECTATOR && !ci->privilege) || (!m_mp(reqmode) && ci->privilege>=PRIV_ROOT)) return;
+        if(!ci || (ci->state.state==CS_SPECTATOR && !ci->privilege) || (!m_mp(reqmode) && ci->privilege<PRIV_ROOT)) return;
         if(!m_valid(reqmode)) return;
         if(!map[0] && !m_check(reqmode, M_EDIT)) 
         {
@@ -2673,7 +2673,7 @@ namespace server
         else connects.removeobj(ci);
     }
 
-    int reserveclients() { return MAXCLIENTS; }
+    int reserveclients() { return 16; }
 
     struct gbaninfo
     {
@@ -2899,7 +2899,7 @@ namespace server
         mapdata = opentempfile("mapdata", "w+b");
         if(!mapdata) { sendf(sender, 1, "ris", N_SERVMSG, "failed to open temporary file for map"); return; }
         mapdata->write(data, len);
-        sendservmsgf("\f2[\f7%s \f2sent a map to server, \"\f0/getmap\f2\" to receive it]", colorname(ci));
+        sendservmsgf("[%s sent a map to server, \"\f0/getmap\f7\" to receive it]", colorname(ci));
     }
 
     void sendclipboard(clientinfo *ci)
@@ -4508,7 +4508,7 @@ namespace server
         }
         else
         {
-            sendservmsgf("\f2[\f7%s \f2is getting the map]", colorname(target));
+            sendservmsgf("[%s is getting the map]", colorname(target));
             if((target->getmap = sendfile(target->clientnum, 2, mapdata, "ri", N_SENDMAP))) target->getmap->freeCallback = freegetmap;
             target->needclipboard = totalmillis ? totalmillis : 1;
         }
@@ -5643,7 +5643,7 @@ namespace server
                     break;
                 }
                 demonextmatch = val;
-                sendservmsgf("\f2[demo recording is %sabled\f2]", demonextmatch ? "\f0en" : "\f3dis");
+                sendservmsgf("demo recording is %sabled", demonextmatch ? "\f0en" : "\f3dis");
                 break;
             }
 
@@ -5680,7 +5680,7 @@ namespace server
                 else if(ci->getmap) sendf(sender, 1, "ris", N_SERVMSG, "already sending map");
                 else
                 {
-                    sendservmsgf("\f2[\f7%s \f2is getting the map]", colorname(ci));
+                    sendservmsgf("[%s is getting the map]", colorname(ci));
                     if((ci->getmap = sendfile(sender, 2, mapdata, "ri", N_SENDMAP)))
                         ci->getmap->freeCallback = freegetmap;
                     ci->needclipboard = totalmillis ? totalmillis : 1;
