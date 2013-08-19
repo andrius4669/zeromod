@@ -2138,7 +2138,7 @@ namespace server
     void vote(const char *map, int reqmode, int sender)
     {
         clientinfo *ci = getinfo(sender);
-        if(!ci || (ci->state.state==CS_SPECTATOR && !ci->privilege) || (!m_mp(reqmode) && ci->privilege<PRIV_ROOT)) return;
+        if(!ci || (ci->state.state==CS_SPECTATOR && !ci->privilege) || !m_mp(reqmode)) return;
         if(!m_valid(reqmode)) return;
         if(!map[0] && !m_check(reqmode, M_EDIT)) 
         {
