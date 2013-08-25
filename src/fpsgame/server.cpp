@@ -650,6 +650,7 @@ namespace server
     VAR(beststats, 0, 1, 1);                        //show best stats
     FVAR(serverintermission, 1.0, 10.0, 3600.0);    //intermission interval (in secconds)
     VAR(serversuggestnp, 0, 1, 1);                  //decides if server suggest players to say #np
+    SVAR(commandchars, "#");                        //defines characters which are interepted as command starting characters
     
     SVAR(serverdesc, "");
     SVAR(serverpass, "");
@@ -4920,7 +4921,7 @@ namespace server
         return (_getpriv(ci)>=priv);
     }
     
-    void _servcmd(const char *cmd, clientinfo *ci)
+    void _servcmd(const char *cmd, clientinfo *ci, char cmdchar = 0)
     {
         char *argv[2];
         string str;
@@ -5310,12 +5311,19 @@ namespace server
                 if(!cq) break;
                 filtertext(ftext, text);
                 _checktext(ftext, ci);
-                if(ftext[0]=='#')
+                char firstchar = ftext[0];
+                bool iscommand = false;
+                for(int z = 0; commandchars[z]; z++) if(firstchar == commandchars[z])
+                {
+                    iscommand = true;
+                    break;
+                }
+                if(iscommand)
                 {
                     cq->messages.drop();
-                    if(strlen(text) > MAXSTRLEN) break;
+                    if(strlen(text) >= MAXSTRLEN) break;
                     logoutf("%s: %s", colorname(cq), ftext);
-                    _servcmd(text + 1, ci);
+                    _servcmd(text + 1, ci, firstchar);
                 }
                 else
                 {
