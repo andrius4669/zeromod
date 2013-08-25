@@ -1,5 +1,36 @@
-This is currently in progress zeromod.
-It isnt productional software, dont use it for serious things ;)
-It currently isnt finished and probably dont have much improvements over 
-official server.
-Use at your own risk.
+This is zeromod, a modification of sauerbraten game server.
+It is currently work-in-progress software and may lack some features you may want; see TODO.
+
+Features:
+	* Has server commands interface
+	* Can reload configuration on-the-fly (via SIGUSR1)
+	* Server administrators can execute commands in server side with #exec
+	* Bots may be kept then changing maps (clearbots 0)
+	* Game length and intermission length can be customized from config file
+	* More privileges for auth system
+	* Best stats (currently limited to fraging stats, no flags/skulls/bases)
+	* Limited modules support (very limited, but has working geoip module)
+	* Ability to increase game length by 50% in
+		teammodes (teamplay, instateam, efficteam, capture & regen capture)
+		as in older Justice version
+	* Ability to change default gamespeed
+	* masterpass & authpass for master and auth privileges
+	* Password bruteforce protection
+	* Colored privilege names
+	* Protection from "disconnected because kicked/banned" messages
+	* Muting players messages and editing
+	* Spy
+
+Some notable commands:
+	* #pm (also possible to multipm with #pm 1,5,7 blablabla)
+	* #stats (also avaiable #stats -1 to show stats of all players)
+	* #exec (executes any cubescript)
+	* #load (loads module from modules/ directory), #unload
+	* #mute, #unmute, #editmute, #editunmute
+	* #help
+	* #priv (to set privilege of client)
+	* #spy
+
+Zeromod is written in same license as original server, zlib (look src/readme_source.txt for details).
+
+Supported architectures are Linux and Windows, but I havent tested it in Windows yet.
