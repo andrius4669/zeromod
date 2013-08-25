@@ -41,8 +41,8 @@ endif
 
 ifneq (,$(findstring MINGW,$(PLATFORM)))
 SERVER_INCLUDES= -DSTANDALONE $(INCLUDES) -Iinclude
-SERVER_LIBS= -mwindows $(STD_LIBS) -L$(WINBIN) -L$(WINLIB) -lzlib1 -lenet -lws2_32 -lwinmm
-MASTER_LIBS= $(STD_LIBS) -L$(WINBIN) -L$(WINLIB) -lzlib1 -lenet -lws2_32 -lwinmm
+SERVER_LIBS= -mwindows $(STD_LIBS) -L$(WINBIN) -L$(WINLIB) -lz -lenet -lws2_32 -lwinmm
+MASTER_LIBS= $(STD_LIBS) -L$(WINBIN) -L$(WINLIB) -lz -lenet -lws2_32 -lwinmm
 else
 SERVER_INCLUDES= -DSTANDALONE $(INCLUDES)
 SERVER_LIBS= -Lenet/.libs -lenet -lz -ldl
@@ -56,7 +56,8 @@ SERVER_OBJS= \
 	engine/server-standalone.o \
 	engine/worldio-standalone.o \
 	fpsgame/entities-standalone.o \
-	fpsgame/server-standalone.o
+	fpsgame/server-standalone.o \
+        fpsgame/modules-standalone.o
 #	engine/world-standalone.o \
 #	engine/octa-standalone.o \
 #	engine/octaedit-standalone.o
@@ -157,6 +158,7 @@ fpsgame/server-standalone.o: shared/iengine.h shared/igame.h fpsgame/ai.h
 fpsgame/server-standalone.o: fpsgame/capture.h fpsgame/ctf.h
 fpsgame/server-standalone.o: fpsgame/collect.h fpsgame/extinfo.h
 fpsgame/server-standalone.o: fpsgame/aiman.h fpsgame/modules.h
+fpsgame/modules-standalone.o: fpsgame/modules.h fpsgame/game.h
 
 engine/master-standalone.o: shared/cube.h shared/tools.h shared/geom.h
 engine/master-standalone.o: shared/ents.h shared/command.h shared/iengine.h

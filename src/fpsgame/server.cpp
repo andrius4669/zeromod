@@ -4180,7 +4180,7 @@ namespace server
             {
                 if(!needunload) return;
                 char *(*reinitfunc)();
-                *(void **)(&reinitfunc) = Z_GETSYM(m->h, "z_reinit");
+                *(Z_LIBFUNC *)(&reinitfunc) = Z_GETSYM(m->h, "z_reinit");
                 if(reinitfunc)
                 {
                     char *ret;
@@ -4202,7 +4202,7 @@ namespace server
             {
                 _debug("unloading");
                 char *(*uninitfunc)();
-                *(void **)(&uninitfunc) = Z_GETSYM(m->h, "z_uninit");
+                *(Z_LIBFUNC *)(&uninitfunc) = Z_GETSYM(m->h, "z_uninit");
                 if(uninitfunc)
                 {
                     char *ret;
@@ -4224,17 +4224,17 @@ namespace server
             m->h = Z_OPENLIB(fname);
             if(!m->h)
             {
-                defformatstring(msg)("\f3[WARN] Plugin \f0%s \f3loading failed \f2(%s)", argv[0], dlerror());
+                defformatstring(msg)("\f3[WARN] Plugin \f0%s \f3loading failed \f2(%s)", argv[0], z_liberror());
                 _notify(msg, ci, PRIV_ADMIN);
                 _modules.remove(mi);
                 return;
             }
             
             char *(*initfunc)(void *, void *, char *);
-            *(void **)(&initfunc) = Z_GETSYM(m->h, "z_init");
+            *(Z_LIBFUNC *)(&initfunc) = Z_GETSYM(m->h, "z_init");
             if(!initfunc)
             {
-                defformatstring(msg)("\f3[FAIL] Plugin \f0%s \f3symbol \f0z_init \f3lookup failed \f2(%s)", argv[0], dlerror());
+                defformatstring(msg)("\f3[FAIL] Plugin \f0%s \f3symbol \f0z_init \f3lookup failed \f2(%s)", argv[0], z_liberror());
                 _notify(msg, ci, PRIV_ADMIN);
                 Z_FREELIB(m->h);
                 _modules.remove(mi);
