@@ -953,6 +953,12 @@ void rundedicatedserver()
 			DispatchMessage(&msg);
 		}
 		serverslice(true, 5);
+		if(reloadcfg)
+		{
+			logoutf("reloading server configuration");
+			execfile("server-init.cfg", false);
+			reloadcfg = false;
+		}
 	}
 #else
     signal(SIGUSR1, reloadsignal);

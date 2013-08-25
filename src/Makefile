@@ -85,7 +85,7 @@ libenet: enet/Makefile
 
 clean-enet: enet/Makefile
 	$(MAKE) -C enet/ clean
-	-$(RM) -r enet/Makefile enet/autom4te.cache enet/config.log enet/config.status enet/.deps
+	-$(RM) -r enet/Makefile enet/autom4te.cache enet/config.log enet/config.status enet/.deps enet/libtool
 
 clean:
 	-$(RM) $(SERVER_OBJS) $(MASTER_OBJS) sauer_server sauer_master
@@ -158,7 +158,7 @@ fpsgame/server-standalone.o: shared/iengine.h shared/igame.h fpsgame/ai.h
 fpsgame/server-standalone.o: fpsgame/capture.h fpsgame/ctf.h
 fpsgame/server-standalone.o: fpsgame/collect.h fpsgame/extinfo.h
 fpsgame/server-standalone.o: fpsgame/aiman.h fpsgame/modules.h
-fpsgame/modules-standalone.o: fpsgame/modules.h fpsgame/game.h
+fpsgame/modules-standalone.o: fpsgame/modules.h
 
 engine/master-standalone.o: shared/cube.h shared/tools.h shared/geom.h
 engine/master-standalone.o: shared/ents.h shared/command.h shared/iengine.h
