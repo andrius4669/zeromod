@@ -2883,13 +2883,20 @@ namespace server
             addgban(val);
     }
 
+    VAR(maxsendmap, 0, 4, 1024);
     void receivefile(int sender, uchar *data, int len)
     {
         clientinfo *ci = getinfo(sender);
-        if(!ci || ((!m_edit ||
-            len > (_getpriv(ci) >= PRIV_MASTER ? 8*1024*1024 : 4*1024*1024)) &&
-            (_getpriv(ci) < PRIV_ROOT))) return;
-        if(ci->state.state==CS_SPECTATOR && !ci->privilege/* && !ci->local*/) return;
+        if(!ci || !m_edit) return;
+        if(ci->state.state==CS_SPECTATOR && !ci->privilege) return;
+        if(len > maxsendmap*1024*1024 && ci->privilege < PRIV_ROOT)
+        {
+            sendf(sender, 1, "ris",
+                maxsendmap
+                ?"server rejected map because of size"
+                :"server has disabled /sendmap");
+            return;
+        }
         if(ci->_xi.editmute)
         {
             sendf(sender, 1, "ris", N_SERVMSG, "\f5[MUTE] \f3Your sendmap was muted");
