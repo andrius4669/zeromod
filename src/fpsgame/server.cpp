@@ -2883,13 +2883,13 @@ namespace server
             addgban(val);
     }
 
-    VAR(maxsendmap, 0, 4, 1024);
+    VAR(maxsendmap, -1, 4, 1024);
     void receivefile(int sender, uchar *data, int len)
     {
         clientinfo *ci = getinfo(sender);
         if(!ci || !m_edit) return;
         if(ci->state.state==CS_SPECTATOR && !ci->privilege) return;
-        if(len > maxsendmap*1024*1024 && ci->privilege < PRIV_ROOT)
+        if(maxsendmap >= 0 && len > maxsendmap*1024*1024 && ci->privilege < PRIV_ROOT)
         {
             sendf(sender, 1, "ris",
                 maxsendmap
@@ -3544,7 +3544,7 @@ namespace server
         _manpages.add(new _manpage("editmute", "[cn] [1/0]", "Mutes one or all players editing"));
         _manpages.add(new _manpage("editunmute", "[cn]", "Unmutes one or all players editing"));
         _manpages.add(new _manpage("load", "<module>", "Loads specified module"));
-        //_manpages.add(new _manpage("reload", "<module>", "Reloads specified module"));        //buggy :(
+        _manpages.add(new _manpage("reload", "<module>", "Reloads specified module"));
         _manpages.add(new _manpage("unload", "<module>", "Unloads specified module"));
         _manpages.add(new _manpage("exec", "<cubescript>", "Executes cubescript command"));
         _manpages.add(new _manpage("spy", "[1/0]", "Enters or leaves spy mode"));
@@ -4877,7 +4877,7 @@ namespace server
         _funcs.add(new _funcdeclaration("set", 0, _set));
         _funcs.add(new _funcdeclaration("vars", PRIV_ADMIN, _showvars));
         _funcs.add(new _funcdeclaration("load", PRIV_ROOT, _load));
-        //_funcs.add(new _funcdeclaration("reload", PRIV_ROOT, _load)); //buggy :(
+        _funcs.add(new _funcdeclaration("reload", PRIV_ROOT, _load));
         _funcs.add(new _funcdeclaration("unload", PRIV_ROOT, _load));
         _funcs.add(new _funcdeclaration("getip", PRIV_ADMIN, _getip));
         _funcs.add(new _funcdeclaration("setpriv", PRIV_MASTER, _setpriv));
