@@ -202,7 +202,8 @@ extern void guessshadowdir();
 
 // pvs
 extern void clearpvs();
-extern bool pvsoccluded(const ivec &bborigin, const ivec &bbsize);
+extern bool pvsoccluded(const ivec &bbmin, const ivec &bbmax);
+extern bool pvsoccludedsphere(const vec &center, float radius);
 extern bool waterpvsoccluded(int height);
 extern void setviewcell(const vec &p);
 extern void savepvs(stream *f);
@@ -211,7 +212,7 @@ extern int getnumviewcells();
 
 static inline bool pvsoccluded(const ivec &bborigin, int size)
 {
-    return pvsoccluded(bborigin, ivec(size, size, size));
+    return pvsoccluded(bborigin, ivec(bborigin).add(size));
 }
 
 // rendergl
@@ -300,20 +301,6 @@ extern void calcmerges();
 
 extern int mergefaces(int orient, facebounds *m, int sz);
 extern void mincubeface(const cube &cu, int orient, const ivec &o, int size, const facebounds &orig, facebounds &cf, ushort nmat = MAT_AIR, ushort matmask = MATF_VOLUME);
-
-static inline uchar octantrectangleoverlap(const ivec &c, int size, const ivec &o, const ivec &s)
-{
-    uchar p = 0xFF; // bitmask of possible collisions with octants. 0 bit = 0 octant, etc
-    ivec v(c);
-    v.add(size);
-    if(v.z <= o.z)     p &= 0xF0; // not in a -ve Z octant
-    else if(v.z >= o.z+s.z) p &= 0x0F; // not in a +ve Z octant
-    if(v.y <= o.y)     p &= 0xCC; // not in a -ve Y octant
-    else if(v.y >= o.y+s.y) p &= 0x33; // etc..
-    if(v.x <= o.x)     p &= 0xAA;
-    else if(v.x >= o.x+s.x) p &= 0x55;
-    return p;
-}
 
 static inline cubeext &ext(cube &c)
 {
@@ -456,7 +443,7 @@ extern void cleanupserver();
 extern void serverslice(bool dedicated, uint timeout);
 extern void updatetime();
 
-extern ENetSocket connectmaster();
+extern ENetSocket connectmaster(bool wait);
 extern void localclienttoserver(int chan, ENetPacket *);
 extern void localconnect();
 extern bool serveroption(char *opt);
@@ -523,7 +510,7 @@ extern void renderbackground(const char *caption = NULL, Texture *mapshot = NULL
 extern void renderprogress(float bar, const char *text, GLuint tex = 0, bool background = false);
 
 extern void getfps(int &fps, int &bestdiff, int &worstdiff);
-extern void swapbuffers();
+extern void swapbuffers(bool overlay = true);
 extern int getclockmillis();
 
 // menu
@@ -551,7 +538,7 @@ extern void entcancel();
 extern void entitiesinoctanodes();
 extern void attachentities();
 extern void freeoctaentities(cube &c);
-extern bool pointinsel(selinfo &sel, vec &o);
+extern bool pointinsel(const selinfo &sel, const vec &o);
 
 extern void resetmap();
 extern void startmap(const char *name);
@@ -566,6 +553,17 @@ extern void startmodelquery(occludequery *query);
 extern void endmodelquery();
 extern void preloadmodelshaders();
 extern void preloadusedmapmodels(bool msg = false, bool bih = false);
+
+static inline model *loadmapmodel(int n)
+{
+    extern vector<mapmodelinfo> mapmodels;
+    if(mapmodels.inrange(n))
+    {
+        model *m = mapmodels[n].m;
+        return m ? m : loadmodel(NULL, n);
+    }
+    return NULL;
+}
 
 // renderparticles
 extern void particleinit();
@@ -653,7 +651,7 @@ extern uchar shouldsaveblendmap();
 namespace recorder
 {
     extern void stop();
-    extern void capture();
+    extern void capture(bool overlay = true);
     extern void cleanup();
 }
 

@@ -271,7 +271,7 @@ namespace server
 
         enum
         {
-            PUSHMILLIS = 2500
+            PUSHMILLIS = 3000
         };
 
         int calcpushrange()
@@ -504,14 +504,14 @@ namespace server
 
     int findmaprotation(int mode, const char *map)
     {
-        for(int i = curmaprotation; i < maprotations.length(); i++)
+        for(int i = max(curmaprotation, 0); i < maprotations.length(); i++)
         {
             maprotation &rot = maprotations[i];
             if(!rot.modes) break;
             if(rot.match(mode, map)) return i;
         }
         int start;
-        for(start = curmaprotation - 1; start >= 0; start--) if(!maprotations[start].modes) break;
+        for(start = max(curmaprotation, 0) - 1; start >= 0; start--) if(!maprotations[start].modes) break;
         start++;
         for(int i = start; i < curmaprotation; i++)
         {
@@ -1575,27 +1575,67 @@ namespace server
         savedscore *sc = findscore(ci, true);
         if(sc) sc->save(ci->state);
     }
+    
+    static struct msgfilter
+    {
+        uchar msgmask[NUMMSG];
+
+        msgfilter(int msg, ...)
+        {
+            memset(msgmask, 0, sizeof(msgmask));
+            va_list msgs;
+            va_start(msgs, msg);
+            for(uchar val = 1; msg < NUMMSG; msg = va_arg(msgs, int))
+            {
+                if(msg < 0) val = uchar(-msg);
+                else msgmask[msg] = val;
+            }
+            va_end(msgs);
+        }
+
+        uchar operator[](int msg) const { return msg >= 0 && msg < NUMMSG ? msgmask[msg] : 0; }
+    } msgfilter(-1, N_CONNECT, N_SERVINFO, N_INITCLIENT, N_WELCOME, N_MAPCHANGE,
+                N_SERVMSG, N_DAMAGE, N_HITPUSH, N_SHOTFX, N_EXPLODEFX, N_DIED,
+                N_SPAWNSTATE, N_FORCEDEATH, N_TEAMINFO, N_ITEMACC, N_ITEMSPAWN,
+                N_TIMEUP, N_CDIS, N_CURRENTMASTER, N_PONG, N_RESUME, N_BASESCORE,
+                N_BASEINFO, N_BASEREGEN, N_ANNOUNCE, N_SENDDEMOLIST, N_SENDDEMO,
+                N_DEMOPLAYBACK, N_SENDMAP, N_DROPFLAG, N_SCOREFLAG, N_RETURNFLAG,
+                N_RESETFLAG, N_INVISFLAG, N_CLIENT, N_AUTHCHAL, N_INITAI,
+                N_EXPIRETOKENS, N_DROPTOKENS, N_STEALTOKENS, N_DEMOPACKET,
+                -2, N_REMIP, N_NEWMAP, N_GETMAP, N_SENDMAP, N_CLIPBOARD, N_EDITMODE, /* eihrul why you didn't added N_EDITMODE? */
+                -3, N_EDITENT, N_EDITF, N_EDITT, N_EDITM, N_FLIP, N_COPY, N_PASTE,
+                N_ROTATE, N_REPLACE, N_DELCUBE, N_EDITVAR, -4, N_POS, NUMMSG),
+      connectfilter(-1, N_CONNECT, -2, N_AUTHANS, -3, N_PING, NUMMSG);
 
     int checktype(int type, clientinfo *ci)
     {
-        if(!ci) return -1;  //0_o TODO check, if it is needed
         if(ci)
         {
-            if(!ci->connected) return type == (ci->connectauth ? N_AUTHANS : N_CONNECT) || type == N_PING ? type : -1;
-            //if(ci->local) return type;
-        }
-        // only allow edit messages in coop-edit mode
-        if(type>=N_EDITMODE && type<=N_EDITVAR && !m_edit) return -1;
-        // server only messages
-        static const int servtypes[] = { N_CONNECT, N_SERVINFO, N_INITCLIENT, N_WELCOME, N_MAPCHANGE, N_SERVMSG, N_DAMAGE, N_HITPUSH, N_SHOTFX, N_EXPLODEFX, N_DIED, N_SPAWNSTATE, N_FORCEDEATH, N_TEAMINFO, N_ITEMACC, N_ITEMSPAWN, N_TIMEUP, N_CDIS, N_CURRENTMASTER, N_PONG, N_RESUME, N_BASESCORE, N_BASEINFO, N_BASEREGEN, N_ANNOUNCE, N_SENDDEMOLIST, N_SENDDEMO, N_DEMOPLAYBACK, N_SENDMAP, N_DROPFLAG, N_SCOREFLAG, N_RETURNFLAG, N_RESETFLAG, N_INVISFLAG, N_CLIENT, N_AUTHCHAL, N_INITAI, N_EXPIRETOKENS, N_DROPTOKENS, N_STEALTOKENS, N_DEMOPACKET };
-        if(ci) 
-        {
-            loopi(sizeof(servtypes)/sizeof(int)) if(type == servtypes[i]) return -1;
-            if(type < N_EDITENT || type > N_EDITVAR || !m_edit)
+            if(!ci->connected) switch(connectfilter[type])
             {
-                if(type != N_POS && ++ci->overflow >= 200) return -2;
+                // allow only before authconnect
+                case 1: return !ci->connectauth ? type : -1;
+                // allow only during authconnect
+                case 2: return ci->connectauth ? type : -1;
+                // always allow
+                case 3: return type;
+                // never allow
+                default: return -1;
             }
+            if(ci->local) return type;
         }
+        switch(msgfilter[type])
+        {
+            // server-only messages
+            case 1: return ci ? -1 : type;
+            // only allowed in coop-edit
+            case 2: if(m_edit) break; return -1;
+            // only allowed in coop-edit, no overflow check
+            case 3: return m_edit ? type : -1;
+            // no overflow check
+            case 4: return type;
+        }
+        if(ci && ++ci->overflow >= 200) return -2;
         return type;
     }
 
@@ -2785,12 +2825,16 @@ namespace server
         return NULL;
     }
 
-    void authfailed(uint id)
+    void authfailed(clientinfo *ci)
     {
-        clientinfo *ci = findauth(id);
         if(!ci) return;
         ci->cleanauth();
         if(ci->connectauth) disconnect_client(ci->clientnum, ci->connectauth);
+    }
+    
+    void authfailed(uint id)
+    {
+        authfailed(findauth(id));
     }
 
     void authsucceeded(uint id)
@@ -2846,6 +2890,17 @@ namespace server
         return false;
     }
 
+    void masterconnected() {}
+    
+    void masterdisconnected()
+    {
+        loopvrev(clients)
+        {
+            clientinfo *ci = clients[i];
+            if(ci->authreq) authfailed(ci); 
+        }
+    }
+    
     bool answerchallenge(clientinfo *ci, uint id, char *val, const char *desc)
     {
         if(ci->authreq != id || strcmp(ci->authdesc, desc)) 
@@ -3540,34 +3595,43 @@ namespace server
         return true;
     }
     
+    static void _addmanpage(const char *cmd, const char *arg, const char *desc)
+	{
+		_manpages.add(new _manpage(cmd, arg, desc));
+	}
+    
     void _initman()
     {
-        _manpages.add(new _manpage("help man", "[command]", "Shows help about command or prints avaiable commands"));
-        _manpages.add(new _manpage("info version", "", "Shows information about server"));
-        _manpages.add(new _manpage("wall", "<message>", "Prints message on the wall"));
-        _manpages.add(new _manpage("set", "<varname> <value>", "Sets variable <varname> to <value>"));
-        _manpages.add(new _manpage("showvars", "", "Shows internal server variables"));
-        _manpages.add(new _manpage("mute", "[cn]", "Mutes one or all players"));
-        _manpages.add(new _manpage("unmute", "[cn]", "Unmutes one or all players"));
-        _manpages.add(new _manpage("priv setpriv givepriv", "[cn] <priv>", "Gives privilege for user (privilege can be number or string, like master)"));
-        _manpages.add(new _manpage("takepriv", "[cn]", "Takes privilege from cn or you"));
-        _manpages.add(new _manpage("setmaster givemaster", "[cn]", "Gives master"));
-        _manpages.add(new _manpage("setadmin giveadmin", "[cn]", "Gives admin"));
-        _manpages.add(new _manpage("spec spectate", "[cn] [mode]", "Spectates one or all players; mode can be: 0-unspectate, 1-spectate for this map, 2-perm"));
-        _manpages.add(new _manpage("unspec unspectate", "[cn]", "Unspectates one or all players"));
-        _manpages.add(new _manpage("stats", "[cn]", "Gives stats of you or another user, use -1 to see stats of all players"));
-        _manpages.add(new _manpage("pm", "<cn>[,cn,...] <message>", "Sends message to specified clients"));
-        _manpages.add(new _manpage("editmute", "[cn] [mode]", "Mutes one or all players editing; mode can be: 0-unmute, 1-mute for this map, 2-perm"));
-        _manpages.add(new _manpage("editunmute", "[cn]", "Unmutes one or all players editing"));
-        _manpages.add(new _manpage("load", "<module>", "Loads specified module"));
-        _manpages.add(new _manpage("reload", "<module>", "Reloads specified module"));
-        _manpages.add(new _manpage("unload", "<module>", "Unloads specified module"));
-        _manpages.add(new _manpage("exec", "<cubescript>", "Executes cubescript command"));
-        _manpages.add(new _manpage("spy", "[1/0]", "Enters or leaves spy mode"));
-        _manpages.add(new _manpage("np forgive fg", "", "Forgives teamkill"));
-        _manpages.add(new _manpage("interm intermission", "", "Starts intermission"));
-        _manpages.add(new _manpage("ban", "cn [time]", "Bans client; time is in format: [num][ ][s/m/h/d]; by default, time is 4h; example: #ban 0 1d"));
-        _manpages.add(new _manpage("votekick", "cn", "Votes client kick"));
+        _addmanpage("help man", "[command]", "Shows help about command or prints avaiable commands");
+        _addmanpage("info version", "", "Shows information about server");
+        _addmanpage("wall", "<message>", "Prints message on the wall");
+        _addmanpage("set", "<varname> <value>", "Sets variable <varname> to <value>");
+        _addmanpage("showvars", "", "Shows internal server variables");
+        _addmanpage("mute", "[cn]", "Mutes one or all players");
+        _addmanpage("unmute", "[cn]", "Unmutes one or all players");
+        _addmanpage("priv setpriv givepriv", "[cn] <priv>", "Gives privilege for user (privilege can be number or string, like master)");
+        _addmanpage("takepriv", "[cn]", "Takes privilege from cn or you");
+        _addmanpage("setmaster givemaster", "[cn]", "Gives master");
+        _addmanpage("setadmin giveadmin", "[cn]", "Gives admin");
+        _addmanpage("spec spectate", "[cn] [mode]", "Spectates one or all players; mode can be: 0-unspectate, 1-spectate for this map, 2-perm");
+        _addmanpage("unspec unspectate", "[cn]", "Unspectates one or all players");
+        _addmanpage("stats", "[cn]", "Gives stats of you or another user, use -1 to see stats of all players");
+        _addmanpage("pm", "<cn>[,cn,...] <message>", "Sends message to specified clients");
+        _addmanpage("editmute", "[cn] [mode]", "Mutes one or all players editing; mode can be: 0-unmute, 1-mute for this map, 2-perm");
+        _addmanpage("editunmute", "[cn]", "Unmutes one or all players editing");
+        _addmanpage("load", "<module>", "Loads specified module");
+        _addmanpage("reload", "<module>", "Reloads specified module");
+        _addmanpage("unload", "<module>", "Unloads specified module");
+        _addmanpage("exec", "<cubescript>", "Executes cubescript command");
+        _addmanpage("spy", "[1/0]", "Enters or leaves spy mode");
+        _addmanpage("np forgive fg", "", "Forgives teamkill");
+        _addmanpage("interm intermission", "", "Starts intermission");
+        _addmanpage("ban", "cn [time]", "Bans client; time is in format: [num][ ][s/m/h/d]; by default, time is 4h; example: #ban 0 1d");
+        _addmanpage("votekick", "cn", "Votes client kick");
+		_addmanpage("interm intermission", "", "Starts intermission");
+        _addmanpage("rename name", "<cn> [name]", "Renames player");
+        _addmanpage("listgbans showgbans", "", "Shows gbas list");
+        _addmanpage("vars", "", "Prints all variables and security descriptors");
     }
     
     void _man(const char *cmd, const char *args, clientinfo *ci)
@@ -3657,6 +3721,25 @@ namespace server
         }
         
 		sendf(ci?ci->clientnum:-1, 1, "ris" , N_SERVMSG, msg);
+    }
+    
+    void _showgbans(const char *cmd, const char *args, clientinfo *ci)
+    {
+        union { uchar b[sizeof(enet_uint32)]; enet_uint32 i; } ip, mask;
+        string msg;
+        if(!ci) return;
+        int sender = ci->clientnum;
+        sendf(sender, 1, "ris", N_SERVMSG, "\f3gban list:");
+        loopv(gbans)
+        {
+            int x = 0;
+            ip.i = gbans[i].ip;
+            mask.i = gbans[i].mask;
+            while(x < 4 && mask.b[x]) x++;
+            formatstring(msg)("%i.%i.%i.%i/%i",
+                int(ip.b[0]), int(ip.b[1]), int(ip.b[2]), int(ip.b[3]), x << 3);
+            sendf(sender, 1, "ris", N_SERVMSG, msg);
+        }
     }
     
     void _showvars(const char *cmd, const char *args, clientinfo *ci)
@@ -4298,6 +4381,26 @@ namespace server
         }
     }
     
+    void _ssetvar(const char *cmd, const char *args, clientinfo *ci)
+	{
+		if(!cmd || !*cmd) return;
+		if(!args || !*args)
+		{
+			defformatstring(msg)("%s = %i", cmd, getvar(cmd));
+			if(ci) sendf(ci->clientnum, 1, "ris", N_SERVMSG, msg);
+		}
+		else setvar(cmd, atoi(args));
+		//TODO maybe broadcast change
+	}
+	
+	void _ssetsvar(const char *cmd, const char *args, clientinfo *ci)
+	{
+		//string buf;
+		if(!cmd || !*cmd) return;
+		setsvar(cmd, args?:"");
+		//TODO maybe broadcast change
+	}
+    
     void _pm(const char *cmd, const char *args, clientinfo *ci)
     {
         char *argv[2];
@@ -4521,24 +4624,53 @@ namespace server
     {
         startintermission();
     }
-    /*
-    void _rename(const char *cmd, const char *args, clientinfo *ci)
+    
+    void _rename(clientinfo *ci, const char *name, bool broadcast = true)
     {
-		//prepare packet
-        packetbuf p(MAXTRANS, ENET_PACKET_FLAG_RELIABLE);
-		putint(p, N_SWITCHNAME);
-		sendstring(name, p);
-		ENetPacket *packet = p.finalize();
-		//put packet into cx->messages for better effeciency
-		cx->messages.put(packet->data, packet->dataLength);
+        uchar buf[MAXSTRLEN];
+        //prepare packet
+        ucharbuf b(buf, MAXSTRLEN);
+        putint(b, N_SWITCHNAME);
+        sendstring(name, b);
+        //broadcast
+        if(broadcast) ci->messages.put(buf, b.len);
+        //prepare packet for client itself
+        packetbuf p(MAXSTRLEN, ENET_PACKET_FLAG_RELIABLE);
         putint(p, N_CLIENT);
-        putint(p, cn);
-        putint(p, ???);
-        putint(p, N_SWITCHNAME);
-        putint(p, 
-		
+        putint(p, ci->clientnum);
+        putint(p, b.len);
+        p.put(buf, b.len);
+        sendpacket(ci->ownernum, 1, p.finalize());
     }
-    */
+    
+    void _renamefunc(const char *cmd, const char *args, clientinfo *ci)
+    {
+        string buf;
+        char *argv[2];
+        copystring(buf, args);
+        _argsep(buf, 2, argv);
+        int cn = atoi(argv[0]);
+        if(!ci && strcmp(argv[0], "0"))
+        {
+            _man("usage", cmd, ci);
+            return;
+        }
+        clientinfo *cx = getinfo(cn);
+        if(!cx)
+        {
+            _notify("\f3[FAIL] No such cn", ci);
+            return;
+        }
+        
+        if(argv[1])
+        {
+            filtertext(cx->name, argv[1], false, MAXNAMELEN);
+            if(!cx->name[0]) copystring(cx->name, "unnamed");
+        }
+        else copystring(cx->name, "unnamed");
+        
+        _rename(cx, cx->name);
+    }
 
     void _sendmap(clientinfo *ci, clientinfo *target)
     {
@@ -4936,6 +5068,8 @@ namespace server
         _addfunc("ban", PRIV_ADMIN, _ban);
         _addfunc("votekick", 0, _votekickfunc);
         _addfunc("sendto", PRIV_MASTER, _sendto);
+        _addfunc("rename name", PRIV_AUTH, _renamefunc);
+        _addfunc("listgbans showgbans", PRIV_AUTH, _showgbans);
     }
     
     void _privfail(clientinfo *ci)
@@ -4972,6 +5106,7 @@ namespace server
         if(!cmd || !cmd[0]) return;
         copystring(str, cmd);
         _argsep(str, 2, argv);
+		filtertext(argv[0], argv[0]);
         
         loopv(_funcs)
         {
@@ -5635,11 +5770,8 @@ namespace server
                 if(!ci->privilege && (spectator!=sender || (ci->state.state==CS_SPECTATOR && (mastermode>=MM_LOCKED || ci->_xi.forcedspectator)))) break;
                 if(ci->_xi.spy && spectator == ci->clientnum)	//unspy spyer
 				{
-					if(!val)
-					{
-						ci->state.state = CS_DEAD;
-						_spy(ci, false);
-					}
+					ci->state.state = (!val) ? CS_DEAD : CS_SPECTATOR;
+					_spy(ci, false);
 					break;
 				}
                 clientinfo *spinfo = (clientinfo *)getclientinfo(spectator); // no bots

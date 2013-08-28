@@ -198,7 +198,7 @@ extern void result(const char *s);
 
 static inline int parseint(const char *s)
 {
-    return int(strtol(s, NULL, 0));
+    return int(strtoul(s, NULL, 0));
 }
 
 static inline float parsefloat(const char *s)
@@ -208,6 +208,9 @@ static inline float parsefloat(const char *s)
     double val = strtod(s, &end);
     return val || end==s || (*end!='x' && *end!='X') ? float(val) : float(parseint(s));
 }
+
+static inline void intformat(char *buf, int v) { formatstring(buf)("%d", v); }
+static inline void floatformat(char *buf, float v) { formatstring(buf)(v==int(v) ? "%.1f" : "%.7g", v); }
 
 static inline const char *getstr(const identval &v, int type) 
 {

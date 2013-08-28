@@ -154,6 +154,13 @@ extern void printfvar(ident *id, float f);
 extern void printsvar(ident *id, const char *s);
 extern int clampvar(ident *id, int i, int minval, int maxval);
 extern float clampfvar(ident *id, float f, float minval, float maxval);
+extern void loopiter(ident *id, identstack &stack, tagval &v);
+extern void loopend(ident *id, identstack &stack);
+
+#define loopstart(id, stack) if((id)->type != ID_ALIAS) return; identstack stack;
+static inline void loopiter(ident *id, identstack &stack, int i) { tagval v; v.setint(i); loopiter(id, stack, v); }
+static inline void loopiter(ident *id, identstack &stack, float f) { tagval v; v.setfloat(f); loopiter(id, stack, v); }
+static inline void loopiter(ident *id, identstack &stack, const char *s) { tagval v; v.setstr(newstring(s)); loopiter(id, stack, v); }
 
 // console
 
@@ -329,6 +336,10 @@ extern void clearmapcrc();
 extern bool loadents(const char *fname, vector<entity> &ents, uint *crc = NULL);
 
 // physics
+extern vec collidewall;
+extern bool collideinside;
+extern physent *collideplayer;
+
 extern void moveplayer(physent *pl, int moveres, bool local);
 extern bool moveplayer(physent *pl, int moveres, bool local, int curtime);
 extern bool collide(physent *d, const vec &dir = vec(0, 0, 0), float cutoff = 0.0f, bool playercol = true);
@@ -485,7 +496,7 @@ struct g3d_gui
     virtual void pushlist() {}
     virtual void poplist() {}
 
-    virtual void allowautotab(bool on) = 0;
+    virtual bool allowautotab(bool on) = 0;
     virtual bool shouldtab() { return false; }
 	virtual void tab(const char *name = NULL, int color = 0) = 0;
     virtual int image(Texture *t, float scale, bool overlaid = false) = 0;
@@ -502,7 +513,7 @@ struct g3d_gui
     virtual char *keyfield(const char *name, int color, int length, int height = 0, const char *initval = NULL, int initmode = EDITORFOCUSED) = 0;
     virtual char *field(const char *name, int color, int length, int height = 0, const char *initval = NULL, int initmode = EDITORFOCUSED) = 0;
     virtual void textbox(const char *text, int width, int height, int color = 0xFFFFFF) = 0;
-    virtual void mergehits(bool on) = 0;
+    virtual bool mergehits(bool on) = 0;
 };
 
 struct g3d_callback
