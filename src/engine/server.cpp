@@ -124,7 +124,7 @@ ENetSocket pongsock = ENET_SOCKET_NULL, lansock = ENET_SOCKET_NULL;
 int localclients = 0, nonlocalclients = 0;
 
 bool hasnonlocalclients() { return nonlocalclients!=0; }
-bool haslocalclients() { return localclients!=0; }
+bool haslocalclients() { return /*localclients!=0;*/ false; }
 
 client &addclient(int type)
 {
@@ -145,7 +145,7 @@ client &addclient(int type)
     switch(type)
     {
         case ST_TCPIP: nonlocalclients++; break;
-        case ST_LOCAL: localclients++; break;
+//      case ST_LOCAL: localclients++; break;
     }
     return *c;
 }
@@ -156,7 +156,7 @@ void delclient(client *c)
     switch(c->type)
     {
         case ST_TCPIP: nonlocalclients--; if(c->peer) c->peer->data = NULL; break;
-        case ST_LOCAL: localclients--; break;
+//      case ST_LOCAL: localclients--; break;
         case ST_EMPTY: return;
     }
     c->type = ST_EMPTY;
@@ -322,10 +322,12 @@ void disconnect_client(int n, int reason)
     server::sendservmsg(s);
 }
 
+#if 0
 void kicknonlocalclients(int reason)
 {
     loopv(clients) if(clients[i]->type==ST_TCPIP) disconnect_client(i, reason);
 }
+#endif
 
 void process(ENetPacket *packet, int sender, int chan)   // sender may be -1
 {
@@ -334,12 +336,14 @@ void process(ENetPacket *packet, int sender, int chan)   // sender may be -1
     if(p.overread()) { disconnect_client(sender, DISC_EOP); return; }
 }
 
+#if 0
 void localclienttoserver(int chan, ENetPacket *packet)
 {
     client *c = NULL;
     loopv(clients) if(clients[i]->type==ST_LOCAL) { c = clients[i]; break; }
     if(c) process(packet, c->num, chan);
 }
+#endif
 
 bool resolverwait(const char *name, ENetAddress *address)
 {
@@ -943,8 +947,12 @@ void rundedicatedserver()
     logoutf("dedicated server started, waiting for clients...");
 #ifdef WIN32
     SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS);
+#else
+	signal(SIGUSR1, reloadsignal);
+#endif
 	for(;;)
 	{
+#ifdef WIN32
 		MSG msg;
 		while(PeekMessage(&msg, NULL, 0, 0, PM_REMOVE))
 		{
@@ -952,6 +960,7 @@ void rundedicatedserver()
 			TranslateMessage(&msg);
 			DispatchMessage(&msg);
 		}
+#endif
 		serverslice(true, 5);
 		if(reloadcfg)
 		{
@@ -960,19 +969,6 @@ void rundedicatedserver()
 			reloadcfg = false;
 		}
 	}
-#else
-    signal(SIGUSR1, reloadsignal);
-    for(;;)
-    {
-        serverslice(true, 5);
-        if(reloadcfg)
-        {
-            logoutf("reloading server configuration");
-            execfile("server-init.cfg", false);
-            reloadcfg = false;
-        }
-    }
-#endif
 }
 
 bool servererror(const char *desc)
