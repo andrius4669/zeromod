@@ -7,6 +7,10 @@
 #define gamma __gamma
 #endif
 
+#if defined(_WIN32) && !defined(WIN32)
+#define WIN32 1
+#endif
+
 #ifdef WIN32
 #define _USE_MATH_DEFINES
 #endif

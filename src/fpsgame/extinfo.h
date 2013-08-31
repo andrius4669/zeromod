@@ -45,8 +45,8 @@
         putint(q, ci->state.health);
         putint(q, ci->state.armour);
         putint(q, ci->state.gunselect);
-        putint(q, min(max(ci->privilege, int(PRIV_NONE)), int(PRIV_ADMIN)));
-        putint(q, ci->_xi.spy?CS_SPECTATOR:ci->state.state);
+        putint(q, clamp(ci->privilege, int(PRIV_NONE), int(PRIV_ADMIN)));
+        putint(q, (!ci->_xi.spy) ? ci->state.state : CS_SPECTATOR);
         // i think it volatiles users privacy; ip shouldnt be shown to everyone who wants
         uint ip = serverhideip ? 0 : getclientip(ci->clientnum);
         q.put((uchar*)&ip, 3);
@@ -73,7 +73,7 @@
         loopv(clients)
         {
             clientinfo *ci = clients[i];
-            if(ci->state.state!=CS_SPECTATOR && ci->team[0] && scores.htfind(ci->team) < 0)
+            if(ci->state.state!=CS_SPECTATOR && !ci->_xi.spy && ci->team[0] && scores.htfind(ci->team) < 0)
             {
                 if(smode && smode->hidefrags()) scores.add(teamscore(ci->team, 0));
                 else { teaminfo *ti = teaminfos.access(ci->team); scores.add(teamscore(ci->team, ti ? ti->frags : 0)); }

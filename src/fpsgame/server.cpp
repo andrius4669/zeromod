@@ -1425,7 +1425,7 @@ namespace server
         loopv(clients) if(clients[i]->privilege >= PRIV_MASTER && !clients[i]->_xi.spy)
         {
             putint(p, clients[i]->clientnum);
-            putint(p, min(clients[i]->privilege, int(PRIV_ROOT)));
+            putint(p, clamp(clients[i]->privilege, int(PRIV_NONE), int(PRIV_ADMIN)));
         }
         putint(p, -1);
     }
@@ -1918,7 +1918,7 @@ namespace server
                 hasmaster = true;
             }
             putint(p, clients[i]->clientnum);
-            putint(p, min(clients[i]->privilege, int(PRIV_ROOT)));
+            putint(p, clamp(clients[i]->privilege, int(PRIV_NONE), int(PRIV_ADMIN)));
         }
         if(hasmaster) putint(p, -1);
         if(gamepaused)
@@ -4695,7 +4695,7 @@ namespace server
     void _sendto(const char *cmd, const char *args, clientinfo *ci)
     {
         int cn;
-        if(!m_edit && _getpriv(ci) < PRIV_ROOT)
+        if(!m_edit)
         {
             if(ci) sendf(ci->clientnum, 1, "ris", N_SERVMSG, "\f2[FAIL] This isnt edit mode");
             return;
@@ -5026,8 +5026,113 @@ namespace server
     
     void _info(const char *cmd, const char *args, clientinfo *ci)
     {
-        defformatstring(msg)("\fs\f5[INFO] \f1zeromod cube2:sauerbraten server mod (based on original server)\n\f5[INFO] \f0Contributors: /dev/zero, ~Haytham\fr");
-        sendf(ci?ci->clientnum:-1, 1, "ris", N_SERVMSG, msg);
+        string msg, buf;
+        uint t, months, weeks, days, hours, minutes, secconds;
+        
+        copystring(msg,
+            "\f5[INFO] \f7Cube 2: Sauerbraten \f2server modification \f7zeromod \f2(based on original server)\n"
+            "\f5[INFO] \f7Contributors: \f0/dev/zero, ~Haytham");
+        
+        sendf(ci ? ci->clientnum : -1, 1, "ris", N_SERVMSG, msg);
+        
+        copystring(msg, "\f5[INFO] \f7Architecture: "
+        /* Firstly determine OS */
+#if !(defined(_WIN32) || defined(WIN32) || defined(WIN64) || defined(_WIN64))
+        /* unix/posix compilant os */
+#   if defined(__linux__) || defined(__linux) || defined(linux) || defined(__gnu_linux__)
+            "\f0GNU/Linux"
+#   elif defined(__GNU__) || defined(__gnu_hurd__)
+            "\f5GNU/Hurd"
+#   elif defined(__FreeBSD_kernel__) && defined(__GLIBC__)
+            "\f3GNU/FreeBSD"
+#   elif defined(__FreeBSD__) || defined(__FreeBSD_kernel__)
+            "\f3FreeBSD"
+#   elif defined(__OpenBSD__)
+            "\f1OpenBSD"
+#   elif defined(__NetBSD__)
+            "\f6NetBSD"
+#   elif defined(__sun) || defined(sun)
+#       if defined(__SVR4) || defined(__svr4__)
+            "\f2Solaris"
+#       else
+            "\f2SunOS"
+#       endif
+#   elif defined(__DragonFly__)
+            "\f0DragonFlyBSD"
+#   elif defined(__MACH__)
+#       if defined(__APPLE__)
+            "\f5Apple"
+#       else
+            "\f5Mach"
+#       endif
+#   elif defined(__CYGWIN__)
+            "\f0Cygwin"
+#   elif defined(__unix__) || defined(__unix) || defined(unix) || defined(_POSIX_VERSION)
+            "\f1UNIX"
+#   else
+            "\f4unknown"
+#   endif
+#else
+        /* Windows */
+            "\f2Windows"
+#endif
+            " \f2"
+        );
+        
+        concatstring(msg, (sizeof(void *) == 8) ? "64-bit" : "32-bit");
+        
+        concatstring(msg, "\n\f5[INFO] \f7Uptime:");
+        
+        t = totalsecs;
+        months = t / (30*24*60*60);
+        t = t % (30*24*60*60);
+        weeks = t / (7*24*60*60);
+        t = t % (7*24*60*60);
+        days = t / (24*60*60);
+        t = t % (24*60*60);
+        hours = t / (60*60);
+        t = t % (60*60);
+        minutes = t / 60;
+        t = t % 60;
+        secconds = t;
+        
+        if(months)
+        {
+            formatstring(buf)(" \f0%u \f2months", months);
+            concatstring(msg, buf);
+        }
+        
+        if(weeks)
+        {
+            formatstring(buf)(" \f0%u \f2weeks", weeks);
+            concatstring(msg, buf);
+        }
+        
+        if(days)
+        {
+            formatstring(buf)(" \f0%u \f2days", days);
+            concatstring(msg, buf);
+        }
+        
+        if(hours)
+        {
+            formatstring(buf)(" \f0%u \f2hours", hours);
+            concatstring(msg, buf);
+        }
+        
+        if(minutes)
+        {
+            formatstring(buf)(" \f0%u \f2minutes", minutes);
+            concatstring(msg, buf);
+        }
+        
+        if(secconds)
+        {
+            formatstring(buf)(" \f0%u \f2secconds", secconds);
+            concatstring(msg, buf);
+        }
+        
+        sendf(ci ? ci->clientnum : -1, 1, "ris", N_SERVMSG, msg);
     }
     
 //  >>> Server internals
