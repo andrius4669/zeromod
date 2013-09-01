@@ -454,7 +454,48 @@ namespace server
             if(getclientip(c.clientnum) == ip) disconnect_client(c.clientnum, DISC_KICK);
         }
     }
- 
+
+    struct _scheduled_disconnect
+    {
+        int n, reason;
+    };
+    vector<_scheduled_disconnect> _scheduled_disconnects;
+    
+    void _schedule_disconnect(int n, int reason)
+    {
+        loopv(_scheduled_disconnects) if(_scheduled_disconnects[i].n == n) return;
+         _scheduled_disconnect d;
+         d.n = n;
+         d.reason = reason;
+         _scheduled_disconnects.add(d);
+    }
+
+    void _cheater(clientinfo *ci, const char *s, int n)
+    {
+        if(!ci) return;
+        string msg;
+        if(n) formatstring(msg)("\f5[AC] \f2Cheater: \f7%s \f5(%i) \f2Type: \f7%s \f1[\f0%03i\f1]",
+            ci->name, ci->clientnum, s ? s : "\f4unknown", n);
+        else formatstring(msg)("\f5[AC] \f2Cheater: \f7%s \f5(%i) \f2Type: \f7%s \f1[BETA]",
+            ci->name, ci->clientnum, s ? s : "\f4unknown");
+        logoutf(msg);
+        loopv(clients) if(clients[i]->privilege >= PRIV_ADMIN) sendf(clients[i]->clientnum, 1, "ris", N_SERVMSG, msg);
+        //TODO track occurances
+        if(n < 100 || ci->privilege >= PRIV_ADMIN) return;
+        if(ci->clientnum != ci->ownernum || ci->state.aitype != AI_NONE)
+        {
+            loopv(clients)
+            if(clients[i]->state.aitype != AI_NONE &&
+                clients[i]->clientnum == clients[i]->ownernum &&
+                clients[i]->clientnum == ci->ownernum)
+            {
+                if(clients[i]->privilege >= PRIV_ADMIN) return;
+                break;
+            }
+        }
+        _schedule_disconnect(ci->ownernum, DISC_MSGERR);
+    }
+
     struct maprotation
     {
         static int exclude;
@@ -2418,11 +2459,22 @@ namespace server
     {
         gamestate &gs = ci->state;
         int wait = millis - gs.lastshot;
-        if(!gs.isalive(gamemillis) ||
+/*      if(!gs.isalive(gamemillis) ||
            wait<gs.gunwait ||
            gun<GUN_FIST || gun>GUN_PISTOL ||
            gs.ammo[gun]<=0 || (guns[gun].range && from.dist(to) > guns[gun].range + 1))
             return;
+*/
+
+        if(gun < GUN_FIST || gun > GUN_PISTOL ||
+            (guns[gun].range && from.dist(to) > guns[gun].range + 1))
+        {
+            _cheater(ci, "gunhack", 100);
+            return;
+        }
+        if(gs.ammo[gun] <= 0) { _cheater(ci, "gunhack::noammo", 0); return; };
+        if(!gs.isalive(gamemillis) || wait < gs.gunwait) return; //tolerate this
+        
         if(gun!=GUN_FIST) gs.ammo[gun]--;
         gs.lastshot = millis;
         gs.gunwait = guns[gun].attackdelay;
@@ -2442,10 +2494,16 @@ namespace server
                 {
                     hitinfo &h = hits[i];
                     clientinfo *target = getinfo(h.target);
-                    if(!target || target->state.state!=CS_ALIVE || h.lifesequence!=target->state.lifesequence || h.rays<1 || h.dist > guns[gun].range + 1) continue;
-
-                    totalrays += h.rays;
-                    if(totalrays>maxrays) continue; //TODO: hacker!
+//                  if(!target || target->state.state!=CS_ALIVE || h.lifesequence!=target->state.lifesequence || h.rays<1 || h.dist > guns[gun].range + 1) continue;
+                    if(!target || target->state.state!=CS_ALIVE || h.lifesequence!=target->state.lifesequence) continue;
+                    if(h.rays > 0) totalrays += h.rays;
+//                  if(totalrays>maxrays) continue;
+                    if(totalrays > maxrays || h.rays < 1 || h.dist > guns[gun].range + 1)
+                    {
+                        //cheat :P
+                        _cheater(ci, "gunhack", 100);
+                        break;
+                    }
                     int damage = h.rays*guns[gun].damage;
                     if(gs.quadmillis) damage *= 4;
                     dodamage(target, ci, damage, gun, h.dir);
@@ -2524,7 +2582,7 @@ namespace server
         while(ci->events.length() > keep) delete ci->events.pop();
         ci->timesync = false;
     }
-
+    
     void serverupdate()
     {
         if(shouldstep && !gamepaused)
@@ -2560,6 +2618,11 @@ namespace server
 
         while(bannedips.length() && bannedips[0].expire-totalmillis <= 0) bannedips.remove(0);
         loopv(connects) if(totalmillis-connects[i]->connectmillis>15000) disconnect_client(connects[i]->clientnum, DISC_TIMEOUT);
+        while(_scheduled_disconnects.length())
+        {
+            disconnect_client(_scheduled_disconnects[0].n, _scheduled_disconnects[0].reason);
+            _scheduled_disconnects.remove(0);
+        }
 
         if(nextexceeded && gamemillis > nextexceeded && (!m_timed || gamemillis < gamelimit))
         {
@@ -4811,9 +4874,9 @@ namespace server
         static int timestat = 0;    //stats timeout
         static int timeout = 0;     //voting timeout
         static int timesugg = 0;    //suggestions timeout
-        if(!timeout || timeout < totalmillis)
+        if(!timeout || totalmillis - timeout >= 2*60*1000)
         {
-            timeout = totalmillis + 2*60000;    //timed out: clear all votekicks except current voter
+            timeout = totalmillis;    //timed out: clear all votekicks except current voter
             loopv(clients) if(clients[i] && clients[i]!=actor) clients[i]->_xi.votekickvictim = -1;
         }
         if(nc < 5) return;  //dont check if less than 5 players
@@ -4852,9 +4915,9 @@ namespace server
             votes.remove(i);
         }
 
-        if(!timestat || timestat < totalmillis)
+        if(!timestat || totalmillis - timestat >= 2000)  //display stats each 2 voting secconds
         {
-            timestat = totalmillis + 2000;  //display stats each 2 voting secconds
+            timestat = totalmillis;
             formatstring(msg)("\f3[votekick]");
             loopv(votes)
             {
@@ -4866,9 +4929,9 @@ namespace server
             concatstring(msg, buf);
             sendf(-1, 1, "ris", N_SERVMSG, msg);
             
-            if(!timesugg || timesugg < totalmillis)
+            if(!timesugg || totalmillis - timesugg >= 5000)  //display suggestions each 5 voting secconds
             {
-                timesugg = totalmillis + 50000; //display suggestions each 5 voting secconds
+                timesugg = totalmillis;
                 sendf(-1, 1, "ris", N_SERVMSG, "\f3[votekick] \f2use \f0/kick \f2or \f0#votekick \f2to vote for kicking");
             }
         }
@@ -5539,7 +5602,7 @@ namespace server
                 if(cq) 
                 {
                     cq->addevent(shot);
-                    cq->setpushed();    //DANGER may be used to hide cheat
+                    if(shot->gun != GUN_FIST) cq->setpushed();  //DANGER may be used to hide cheat
                 }
                 else delete shot;
                 break;
@@ -5734,11 +5797,11 @@ namespace server
                 loopi(size-1) getint(p);
                 if(cq && (ci->_xi.editmute || cq->_xi.editmute))
                 {
-                    if(!ci->_xi.editmutewarn || ci->_xi.editmutewarn < totalmillis)
+                    if(!ci->_xi.editmutewarn || totalmillis - ci->_xi.editmutewarn >= 10000)
                     {
                         sendf(sender, 1, "ris", N_SERVMSG,
                               "\f5[MUTE] \f3Your editing is muted");
-                        ci->_xi.editmutewarn = totalmillis + 10000;
+                        ci->_xi.editmutewarn = totalmillis;
                     }
                     break;
                 }
@@ -5760,11 +5823,11 @@ namespace server
                 if(/*!ci || */ci->state.state==CS_SPECTATOR) break;
                 if(ci->_xi.editmute)
                 {
-                    if(!ci->_xi.editmutewarn || ci->_xi.editmutewarn < totalmillis)
+                    if(!ci->_xi.editmutewarn || totalmillis - ci->_xi.editmutewarn >= 10000)
                     {
                         sendf(sender, 1, "ris", N_SERVMSG,
                               "\f5[MUTE] \f3Your editing is muted");
-                        ci->_xi.editmutewarn = totalmillis + 10000;
+                        ci->_xi.editmutewarn = totalmillis;
                     }
                     break;
                 }
@@ -5796,11 +5859,11 @@ namespace server
                 }
                 if(ci && ci->_xi.editmute)
                 {
-                    if(!ci->_xi.editmutewarn || ci->_xi.editmutewarn < totalmillis)
+                    if(!ci->_xi.editmutewarn || totalmillis - ci->_xi.editmutewarn >= 10000)
                     {
                         sendf(sender, 1, "ris", N_SERVMSG,
                               "\f5[MUTE] \f3Your editing is muted");
-                        ci->_xi.editmutewarn = totalmillis + 10000;
+                        ci->_xi.editmutewarn = totalmillis;
                     }
                     break;
                 }
@@ -5984,11 +6047,11 @@ namespace server
                 int size = getint(p);
                 if(ci->_xi.editmute)
                 {
-                    if(!ci->_xi.editmutewarn || ci->_xi.editmutewarn < totalmillis)
+                    if(!ci->_xi.editmutewarn || totalmillis - ci->_xi.editmutewarn >= 10000)
                     {
                         sendf(sender, 1, "ris", N_SERVMSG,
                               "\f5[MUTE] \f3Your newmap was muted");
-                        ci->_xi.editmutewarn = totalmillis + 10000;
+                        ci->_xi.editmutewarn = totalmillis;
                     }
                     break;
                 }
@@ -6121,11 +6184,11 @@ namespace server
                 loopi(size-1) getint(p);
                 if(ci && ci->_xi.editmute)
                 {
-                    if(!ci->_xi.editmutewarn || ci->_xi.editmutewarn < totalmillis)
+                    if(!ci->_xi.editmutewarn || totalmillis - ci->_xi.editmutewarn >= 10000)
                     {
                         sendf(sender, 1, "ris", N_SERVMSG,
                               "\f5[MUTE] \f3Your editing is muted");
-                        ci->_xi.editmutewarn = totalmillis + 10000;
+                        ci->_xi.editmutewarn = totalmillis;
                     }
                     break;
                 }
@@ -6143,11 +6206,11 @@ namespace server
                 loopi(size-1) getint(p);
                 if(ci && ci->_xi.editmute)
                 {
-                    if(!ci->_xi.editmutewarn || ci->_xi.editmutewarn < totalmillis)
+                    if(!ci->_xi.editmutewarn || totalmillis - ci->_xi.editmutewarn >= 10000)
                     {
                         sendf(sender, 1, "ris", N_SERVMSG,
                               "\f5[MUTE] \f3Your editing is muted");
-                        ci->_xi.editmutewarn = totalmillis + 10000;
+                        ci->_xi.editmutewarn = totalmillis;
                     }
                     break;
                 }

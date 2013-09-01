@@ -59,7 +59,7 @@ SERVER_LIBS= -mwindows $(STD_LIBS) -L$(WINBIN) -L$(WINLIB) -lz -lenet -lws2_32 -
 MASTER_LIBS= $(STD_LIBS) -L$(WINBIN) -L$(WINLIB) -lz -lenet -lws2_32 -lwinmm
 else
 SERVER_INCLUDES= -DSTANDALONE $(INCLUDES)
-SERVER_LIBS= -Lenet/.libs -lenet -lz -ldl
+SERVER_LIBS= -Lenet/.libs -lenet -lz
 MASTER_LIBS= $(SERVER_LIBS)
 endif
 SERVER_OBJS= \
@@ -85,6 +85,10 @@ MASTER_OBJS= \
 
 ifeq ($(PLATFORM),SunOS)
 SERVER_LIBS+= -lsocket -lnsl
+endif
+
+ifeq ($(PLATFORM),Linux)
+SERVER_LIBS+= -ldl
 endif
 
 default: all
