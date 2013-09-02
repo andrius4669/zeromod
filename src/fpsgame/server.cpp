@@ -1,5 +1,6 @@
 #include "game.h"
 #include "modules.h"
+#include "anticheat.h"
 
 namespace game
 {
@@ -228,6 +229,7 @@ namespace server
         int failpass;
         clientinfo *tkiller;
         int votekickvictim;
+        char acinfo[AC_MAX];
     };
     
     struct clientinfo
@@ -419,6 +421,7 @@ namespace server
     int gamemillis = 0, gamelimit = 0, nextexceeded = 0, gamespeed = 100;
     bool gamepaused = false, shouldstep = true;
 
+    void checkmaps(int req = -1);
     int _getpriv(clientinfo *ci);
 	void _forcespectator(clientinfo *ci, int spec);
     
@@ -469,31 +472,82 @@ namespace server
          d.reason = reason;
          _scheduled_disconnects.add(d);
     }
-
-    void _cheater(clientinfo *ci, const char *s, int n)
+    
+    VAR(anticheat, 0, 3, 4);
+/*
+ *  0=disable, 1=warn on cheat,
+ *  2=warn&disc on cheat, 3=warn&disc normal cheats, warn beta,
+ *  4=warn&disc on all cheats (not recomended)
+ */
+    VAR(anticheatmessages, 0, 2, 2);    // 0=everyone, 1=masters, 2=admins
+    
+    void _cheater(clientinfo *ci, const char *s, int type, int n)
     {
-        if(!ci) return;
+        clientinfo *owner;
         string msg;
-        if(n) formatstring(msg)("\f5[AC] \f2Cheater: \f7%s \f5(%i) \f2Type: \f7%s \f1[\f0%03i\f1]",
-            ci->name, ci->clientnum, s ? s : "\f4unknown", n);
-        else formatstring(msg)("\f5[AC] \f2Cheater: \f7%s \f5(%i) \f2Type: \f7%s \f1[BETA]",
-            ci->name, ci->clientnum, s ? s : "\f4unknown");
-        logoutf(msg);
-        loopv(clients) if(clients[i]->privilege >= PRIV_ADMIN) sendf(clients[i]->clientnum, 1, "ris", N_SERVMSG, msg);
-        //TODO track occurances
-        if(n < 100 || ci->privilege >= PRIV_ADMIN) return;
-        if(ci->clientnum != ci->ownernum || ci->state.aitype != AI_NONE)
+        
+        if(!ci || anticheat <= 0) return;
+        
+        if(ci->state.aitype == AI_NONE) owner = ci;
+        else
         {
-            loopv(clients)
-            if(clients[i]->state.aitype != AI_NONE &&
-                clients[i]->clientnum == clients[i]->ownernum &&
-                clients[i]->clientnum == ci->ownernum)
+            owner = (clientinfo *)getclientinfo(ci->ownernum);
+            if(!owner) return;
+        }
+        
+        if(type < 0 || type >= AC_MAX) return;
+        
+        if(!s) s = cheats[type].name;
+        
+        if(n > 0)
+        {
+            owner->_xi.acinfo[type] = char(min(int(owner->_xi.acinfo[type]) + min(n, 100), 100));
+            n = int(owner->_xi.acinfo[type]);
+            
+            if(ci->state.aitype == AI_NONE)
             {
-                if(clients[i]->privilege >= PRIV_ADMIN) return;
-                break;
+                formatstring(msg)("\f3[AC] \f2Cheater: \f7%s \f5(%i) \f2Type: \f7%s \f1[\f0%03i\f1]",
+                    ci->name, ci->clientnum, s, n);
+            }
+            else
+            {
+                formatstring(msg)("\f3[AC] \f2Cheater: \f7%s \f5[%i] \f2(Owner: \f7%s \f5(%i)\f2) Type: \f7%s \f1[\f0%03i\f1]",
+                    ci->name, ci->clientnum, owner->name, owner->clientnum, s, n);
             }
         }
-        _schedule_disconnect(ci->ownernum, DISC_MSGERR);
+        else
+        {
+            if(anticheat < 3) return;
+            if(ci->state.aitype == AI_NONE)
+            {
+                formatstring(msg)("\f3[AC] \f2Cheater: \f7%s \f5(%i) \f2Type: \f7%s \f1[BETA]",
+                    ci->name, ci->clientnum, s);
+            }
+            else
+            {
+                formatstring(msg)("\f3[AC] \f2Cheater: \f7%s \f5[%i] \f2(Owner: \f7%s \f5(%i)\f2) Type: \f7%s \f1[BETA]",
+                    ci->name, ci->clientnum, owner->name, owner->clientnum, s);
+            }
+        }
+        
+        logoutf(msg);
+        
+        if(anticheatmessages)
+        {
+            loopv(clients)
+            {
+                if(clients[i]->state.aitype == AI_NONE && clients[i]->privilege >= (anticheatmessages == 2 ? PRIV_ADMIN : PRIV_MASTER))
+                    sendf(clients[i]->clientnum, 1, "ris", N_SERVMSG, msg);
+            }
+        }
+        else sendf(-1, 1, "ris", N_SERVMSG, msg);
+        
+        //TODO track occurances
+        
+        if(anticheat <= 1 || ci->privilege >= PRIV_ADMIN || owner->privilege >= PRIV_ADMIN) return;
+        
+        if(n >= 100 || (anticheat >= 4 && n == 0))
+            _schedule_disconnect(ci->ownernum, DISC_MSGERR);
     }
 
     struct maprotation
@@ -991,10 +1045,17 @@ namespace server
  
     bool pickup(int i, int sender)         // server side item pickup, acknowledge first client that gets it
     {
-        //TODO: anticheat
-        if((m_timed && gamemillis>=gamelimit) || !sents.inrange(i) || !sents[i].spawned) return false;
         clientinfo *ci = getinfo(sender);
-        if(!ci || !ci->state.canpickup(sents[i].type)) return false;
+        if(!ci || (m_timed && gamemillis >= gamelimit)) return false;
+        if(!sents.inrange(i))
+        {
+            if(m_edit) return false;
+            ci->mapcrc = 1;
+            checkmaps();
+            return false;
+        }
+        //if((m_timed && gamemillis>=gamelimit) || !sents.inrange(i) || !sents[i].spawned) return false;
+        if(!ci->state.canpickup(sents[i].type)) return false;
         sents[i].spawned = false;
         sents[i].spawntime = spawntime(sents[i].type);
         sendf(-1, 1, "ri3", N_ITEMACC, i, sender);
@@ -2467,12 +2528,17 @@ namespace server
 */
 
         if(gun < GUN_FIST || gun > GUN_PISTOL ||
-            (guns[gun].range && from.dist(to) > guns[gun].range + 1))
+            (guns[gun].range && from.dist(to) > guns[gun].range + 1) ||
+            (m_insta && gun!=GUN_FIST && gun!=GUN_RIFLE))
         {
-            _cheater(ci, "gunhack", 100);
+            _cheater(ci, "gunhack", AC_GUNHACK, 100);
             return;
         }
-        if(gs.ammo[gun] <= 0) { _cheater(ci, "gunhack::noammo", 0); return; };
+        if(gs.ammo[gun] <= 0)
+        {
+            if(!m_edit) _cheater(ci, "gunhack::noammo", AC_GUNHACK, 0);
+            return;
+        }
         if(!gs.isalive(gamemillis) || wait < gs.gunwait) return; //tolerate this
         
         if(gun!=GUN_FIST) gs.ammo[gun]--;
@@ -2501,7 +2567,7 @@ namespace server
                     if(totalrays > maxrays || h.rays < 1 || h.dist > guns[gun].range + 1)
                     {
                         //cheat :P
-                        _cheater(ci, "gunhack", 100);
+                        _cheater(ci, "gunhack", AC_GUNHACK, 100);
                         break;
                     }
                     int damage = h.rays*guns[gun].damage;
@@ -2668,7 +2734,7 @@ namespace server
 
 	VAR(serverspecmod, 0, 0, 2);	//server spectates moded map owners: 0=no, 1=for this map only, 2=perm (saved in clientinfo)
 	
-    void checkmaps(int req = -1)
+    void checkmaps(int req)
     {
         if(m_edit || !smapname[0]) return;
         vector<crcinfo> crcs;
@@ -2677,7 +2743,7 @@ namespace server
         loopv(clients)
         {
             clientinfo *ci = clients[i];
-            if(ci->state.state==CS_SPECTATOR || ci->state.aitype != AI_NONE) continue;
+            if(ci->state.state==CS_SPECTATOR || ci->_xi.spy || ci->state.aitype != AI_NONE) continue;
             total++;
             if(!ci->clientmap[0])
             {
@@ -2698,7 +2764,7 @@ namespace server
         loopv(clients)
         {
             clientinfo *ci = clients[i];
-            if(ci->state.state==CS_SPECTATOR || ci->state.aitype != AI_NONE || ci->clientmap[0] || ci->mapcrc >= 0 || (req < 0 && ci->warned)) continue;
+            if(ci->state.state==CS_SPECTATOR || ci->_xi.spy || ci->state.aitype != AI_NONE || ci->clientmap[0] || ci->mapcrc >= 0 || (req < 0 && ci->warned)) continue;
             formatstring(msg)("%s has modified map \"%s\"", colorname(ci), smapname);
             sendf(req, 1, "ris", N_SERVMSG, msg);
             if(req < 0)
@@ -2714,7 +2780,7 @@ namespace server
             if(i || info.matches <= crcs[i+1].matches) loopvj(clients)
             {
                 clientinfo *ci = clients[j];
-                if(ci->state.state==CS_SPECTATOR || ci->state.aitype != AI_NONE || !ci->clientmap[0] || ci->mapcrc != info.crc || (req < 0 && ci->warned)) continue;
+                if(ci->state.state==CS_SPECTATOR || ci->_xi.spy || ci->state.aitype != AI_NONE || !ci->clientmap[0] || ci->mapcrc != info.crc || (req < 0 && ci->warned)) continue;
                 formatstring(msg)("%s has modified map \"%s\"", colorname(ci), smapname);
                 sendf(req, 1, "ris", N_SERVMSG, msg);
                 if(req < 0)
