@@ -541,9 +541,7 @@ namespace server
             }
         }
         else sendf(-1, 1, "ris", N_SERVMSG, msg);
-        
-        //TODO track occurances
-        
+                
         if(anticheat <= 1 || ci->privilege >= PRIV_ADMIN || owner->privilege >= PRIV_ADMIN) return;
         
         if(n >= 100 || (anticheat >= 4 && n == 0))
@@ -1050,7 +1048,7 @@ namespace server
         if(!sents.inrange(i))
         {
             if(m_edit) return false;
-            ci->mapcrc = 1;
+            ci->mapcrc = -1;
             checkmaps();
             return false;
         }
@@ -2495,6 +2493,7 @@ namespace server
                 break;
 
             default:
+                _cheater(ci, "gunhack::explosion::invalid_gun", AC_GUNHACK, 100);
                 return;
         }
         sendf(-1, 1, "ri4x", N_EXPLODEFX, ci->clientnum, gun, id, ci->ownernum);
@@ -2502,12 +2501,15 @@ namespace server
         {
             hitinfo &h = hits[i];
             clientinfo *target = getinfo(h.target);
-            if(!target || target->state.state!=CS_ALIVE || h.lifesequence!=target->state.lifesequence || h.dist<0 || h.dist>guns[gun].exprad) continue;
-
+//          if(!target || target->state.state!=CS_ALIVE || h.lifesequence!=target->state.lifesequence || h.dist<0 || h.dist>guns[gun].exprad) continue;
+            if(!target || target->state.state!=CS_ALIVE || h.lifesequence!=target->state.lifesequence) continue;
             bool dup = false;
             loopj(i) if(hits[j].target==h.target) { dup = true; break; }
-            if(dup) continue;
-
+            if(h.dist < 0 || h.dist > guns[gun].exprad || dup)
+            {
+                _cheater(ci, "gunhack::explosioin", AC_GUNHACK, 100);
+                break;
+            }
             int damage = guns[gun].damage;
             if(gs.quadmillis) damage *= 4;
             damage = int(damage*(1-h.dist/EXP_DISTSCALE/guns[gun].exprad));
@@ -2528,8 +2530,7 @@ namespace server
 */
 
         if(gun < GUN_FIST || gun > GUN_PISTOL ||
-            (guns[gun].range && from.dist(to) > guns[gun].range + 1) ||
-            (m_insta && gun!=GUN_FIST && gun!=GUN_RIFLE))
+            (guns[gun].range && from.dist(to) > guns[gun].range + 1))
         {
             _cheater(ci, "gunhack", AC_GUNHACK, 100);
             return;
@@ -4566,22 +4567,17 @@ namespace server
                 }
                 else return;
             }
-            bool exists=false;
-            for(int k=0;k<clientnums.length();k++) if(j==clientnums[k]) exists=true;
+            bool exists = false;
+            loopvk(clientnums) if(j == clientnums[k]) exists = true;
             if(!exists) clientnums.add(j);
         }
         
         formatstring(msg)("\f1[PM:\f0%i\f1:\f7%s\f1] \f0%s", ci->clientnum, colorname(ci), argv[1]);
         
-        for(int i=0;i<clientnums.length();i++)
+        loopv(clientnums)
         {
             int j = clientnums[i];
-            
-            for(int k = 0; k < clients.length(); k++) if(clients[k]->clientnum == j)
-            {
-                sendf(j, 1, "ris", N_SERVMSG, msg);
-                break;
-            }
+            if(getclientinfo(j)) sendf(j, 1, "ris", N_SERVMSG, msg);            
         }
     }
     
@@ -4840,7 +4836,7 @@ namespace server
             return;
         }
         
-        clientinfo *cx = getinfo(cn);
+        clientinfo *cx = (clientinfo *)getclientinfo(cn);
         if(!cx)
         {
             if(ci)
@@ -4867,9 +4863,9 @@ namespace server
             else logoutf("_ban:%s isnt cn", argv[0]);
             return;
         }
-        clientinfo *cx = getinfo(cn);
+        clientinfo *cx = (clientinfo *)getclientinfo(cn);
         uint ip = getclientip(cn);
-        if(!ip || !cx)
+        if(!cx || !ip)
         {
             if(ci) sendf(ci->clientnum, 1, "ris", "\f2[FAIL] Such client number not found");
             else logoutf("_ban:no such cn");
@@ -4943,10 +4939,10 @@ namespace server
         if(!timeout || totalmillis - timeout >= 2*60*1000)
         {
             timeout = totalmillis;    //timed out: clear all votekicks except current voter
-            loopv(clients) if(clients[i] && clients[i]!=actor) clients[i]->_xi.votekickvictim = -1;
+            loopv(clients) if(clients[i] != actor) clients[i]->_xi.votekickvictim = -1;
         }
         if(nc < 5) return;  //dont check if less than 5 players
-        loopv(clients) if(clients[i] && clients[i]->_xi.votekickvictim >= 0)
+        loopv(clients) if(clients[i]->_xi.votekickvictim >= 0)
         {
             int cn = clients[i]->_xi.votekickvictim;
             clientinfo *ci = (clientinfo *)getclientinfo(cn);
@@ -5021,10 +5017,17 @@ namespace server
         return true;
     }
     
+    VAR(votekick, 0, 1, 1);
+    
     void _votekickfunc(const char *cmd, const char *args, clientinfo *ci)
     {
         int cn;
         if(!ci) return;
+        if(!votekick)
+        {
+            sendf(ci->clientnum, 1, "ris", N_SERVMSG, "Votekick is disabled in this server");
+            return;
+        }
         if(!args || !*args || (!(cn = atoi(args)) && strcmp(args, "0")))
         {
             _man("usage", cmd, ci);
@@ -5061,20 +5064,12 @@ namespace server
             }
             
             bool exists=false;
-            for(int j=0;j<cns.length();j++) if(cn==cns[j]->clientnum) exists=true;
+            loopvj(cns) if(cn == cns[j]->clientnum) { exists=true; break; }
             if(exists) continue;
             
-            bool found = false;
-            for(int j=0;j<clients.length();j++)
-            {
-                if(cn==clients[j]->clientnum)
-                {
-                    cns.add(clients[j]);
-                    found = true;
-                    break;
-                }
-            }
-            if(!found)
+            clientinfo *cx = getinfo(cn);
+            if(cx) cns.add(cx);
+            else
             {
                 formatstring(msg)("\f2[FAIL] Unknown client number \f0%i", cn);
                 _notify(msg, ci);
@@ -5082,17 +5077,17 @@ namespace server
             }
         }
         //no cns found?
-        if(cns.length()==0)
+        if(cns.empty())
         {
             if(ci) cns.add(ci);
             else if(cnc == 0)
             {
-                for(int i=0;i<clients.length();i++) cns.add(clients[i]);
+                loopv(clients) cns.add(clients[i]);
             }
         }
         
         int sendcn = ci ? ci->clientnum : -1;
-        for(int i=0;i<cns.length();i++)
+        loopv(cns)
         {
             clientinfo *cx=cns[i];
             if(!m_teammode)
@@ -5141,7 +5136,7 @@ namespace server
             _man("usage", cmd, ci);
             return;
         }
-        clientinfo *cx = getinfo(cn);
+        clientinfo *cx = (clientinfo *)getclientinfo(cn);
         if(!cx)
         {
             formatstring(msg)("\f2[FAIL] Unknown client number \f0%i", cn);
@@ -5315,7 +5310,7 @@ namespace server
     void _nocommand(const char *cmd, clientinfo *ci)
     {
         if(!ci || !cmd || !cmd[0]) return;
-        defformatstring(msg)("\f4[????] \f2Undefined command \f0%s\f2. Please see manual (type \f0#man\f2)", cmd);
+        defformatstring(msg)("\f5[????] \f2Undefined command \f0%s\f2. Please see manual (type \f0#man\f2)", cmd);
         sendf(ci->clientnum, 1, "ris", N_SERVMSG, msg);
     }
     
@@ -5335,12 +5330,12 @@ namespace server
         string str;
         bool executed=false;
         
-        if(!_funcs.length()) _initfuncs();
+        if(_funcs.empty()) _initfuncs();
         
         if(!cmd || !cmd[0]) return;
         copystring(str, cmd);
         _argsep(str, 2, argv);
-		filtertext(argv[0], argv[0]);
+        filtertext(argv[0], argv[0]);
         
         loopv(_funcs)
         {
@@ -5372,7 +5367,7 @@ namespace server
         if((argv[0][0]=='n' || argv[0][0]=='N') && (argv[0][1]=='p' || argv[0][1]=='P')) goto _np;
         if(argc >= 2 && (argv[0][0]=='n' || argv[0][0]=='N') && (argv[1][0]=='p' || argv[1][0]=='P') && (argv[1][1]=='r' || argv[1][1]=='R')) goto _np;
         return;
-        _np:
+    _np:
         sendf(ci->clientnum, 1, "ris", N_SERVMSG, "\f1[FORGIVE] type #np if you want to forgive teamkill");
     }
     
@@ -5610,11 +5605,18 @@ namespace server
 
             case N_GUNSELECT:
             {
-                int gunselect = getint(p);  //TODO anticheat
+                int gunselect = getint(p);
                 if(!cq || cq->state.state!=CS_ALIVE) break;
-                cq->state.gunselect = gunselect >= GUN_FIST && gunselect <= GUN_PISTOL ? gunselect : GUN_FIST;
+                
+                if(gunselect < GUN_FIST || gunselect > GUN_PISTOL)
+                {
+                    _cheater(cq, "gunhack", AC_GUNHACK, 100);
+                    break;
+                }
+                cq->state.gunselect = !m_insta || gunselect == GUN_FIST || gunselect == GUN_RIFLE ? gunselect : GUN_FIST;
                 QUEUE_AI;
-                QUEUE_MSG;
+                QUEUE_INT(N_GUNSELECT);
+                QUEUE_INT(cq->state.gunselect);
                 break;
             }
 
@@ -5653,7 +5655,7 @@ namespace server
                 loopk(hits)
                 {
                     if(p.overread()) break;
-                    if(k > 100)
+                    if(k > MAXRAYS)
                     {
                         loopj(7) getint(p);
                         continue;
@@ -5685,7 +5687,7 @@ namespace server
                 loopk(hits)
                 {
                     if(p.overread()) break;
-                    if(k > 100)
+                    if(k > 256)
                     {
                         loopj(7) getint(p);
                         continue;
@@ -5993,7 +5995,7 @@ namespace server
                 int victim = getint(p);
                 getstring(text, p);
                 filtertext(text, text);
-                if(trykick(ci, victim, text, 0, 0, 0, true)) trykick(ci, victim, text);
+                if(!votekick || trykick(ci, victim, text, 0, 0, 0, true)) trykick(ci, victim, text);
                 else _votekick(ci, victim);
                 break;
             }
