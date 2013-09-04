@@ -3,11 +3,11 @@ It is currently work-in-progress software and may lack some features you may wan
 
 Features:
 	* Has server commands interface
-	* Can reload configuration on-the-fly (via SIGUSR1)
+	* Can reload configuration on-the-fly (via SIGUSR1 or #exec)
 	* Server administrators can execute commands in server side with #exec
 	* Bots may be kept then changing maps (clearbots 0)
 	* Game length and intermission length can be customized from config file
-	* More privileges for auth system
+	* More privileges for auth system (supports c - master, m - auth, a - admin, r - root)
 	* Best stats (currently limited to fraging stats, no flags/skulls/bases)
 	* Limited modules support (very limited, but has working geoip module)
 	* Ability to increase game length by 50% in
@@ -17,20 +17,28 @@ Features:
 	* masterpass & authpass for master and auth privileges
 	* Password bruteforce protection
 	* Colored privilege names
-	* Protection from "disconnected because kicked/banned" messages
+	* Ability to diable "disconnected because kicked/banned" messages
 	* Muting players messages and editing
 	* Spy
+	* Renaming players
+	* Forcibly spectating certain players
+	* Automatic spectating of players with modified maps
 
 Some notable commands:
 	* #pm (also possible to multipm with #pm 1,5,7 blablabla)
 	* #stats (also avaiable #stats -1 to show stats of all players)
-	* #exec (executes any cubescript)
+	* #exec (executes any cubescript, requires "root" privileges on server (avaiable via auth))
 	* #load (loads module from modules/ directory), #unload
 	* #mute, #unmute, #editmute, #editunmute
+	* #spectator (also shortcututs #spec, #unspec, etc)
 	* #help
 	* #priv (to set privilege of client)
 	* #spy
+	* #rename
 
-Zeromod is written in same license as original server, zlib (look src/readme_source.txt for details).
+Zeromod is written in zlib license (look src/readme_source.txt for details).
 
-Supported architectures are Linux and Windows, but I havent tested it in Windows yet.
+Supported architectures are Linux, FreeBSD and Windows.
+Other architectures may work, but aren't tested.
+
+See files under docs/ directory for more help.

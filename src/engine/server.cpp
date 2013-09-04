@@ -7,6 +7,7 @@
 
 static FILE *logfile = NULL;
 volatile bool reloadcfg = false;
+SVAR(configfile, "server-init.cfg");
 
 void closelogfile()
 {
@@ -999,7 +1000,7 @@ void rundedicatedserver()
 		if(reloadcfg)
 		{
 			logoutf("reloading server configuration");
-			execfile("server-init.cfg", false);
+			execfile(configfile, false);
 			reloadcfg = false;
 		}
 	}
@@ -1050,7 +1051,7 @@ void initserver(void)
     setupwindow("Cube 2: Sauerbraten server (zeromod)");
 #endif
 
-    execfile("server-init.cfg", false);
+    execfile(configfile, false);
     
     setuplistenserver();
 
@@ -1072,6 +1073,7 @@ bool serveroption(char *opt)
         case 'q': logoutf("Using home directory: %s", opt); sethomedir(opt+2); return true;
         case 'k': logoutf("Adding package directory: %s", opt); addpackagedir(opt+2); return true;
         case 'g': logoutf("Setting log file: %s", opt); setlogfile(opt+2); return true;
+        case 's': setsvar("configfile", opt+2); return true;
         default: return false;
     }
 }
