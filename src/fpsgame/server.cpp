@@ -910,7 +910,6 @@ namespace server
         mcrc = 0;
         ments.setsize(0);
         sents.setsize(0);
-        //cps.reset();
     }
 
     bool serveroption(const char *arg)
@@ -2860,7 +2859,7 @@ namespace server
         else connects.removeobj(ci);
     }
 
-    int reserveclients() { return 16; }
+    int reserveclients() { return 8; }
 
     struct gbaninfo
     {
@@ -3177,30 +3176,14 @@ namespace server
     void _debug(const char *msg)
     {
         string buf;
-        logoutf("debug::%s", msg?:"");
-        formatstring(buf)("\f4[DEBUG] \f7%s", msg?:"");
+        logoutf("debug::%s", msg ? msg : "");
+        formatstring(buf)("\f4[DEBUG] \f7%s", msg ? msg : "");
         loopv(clients) if(clients[i] && clients[i]->privilege >= debuglevel)
         {
             sendf(clients[i]->clientnum, 1, "ris", N_SERVMSG, buf);
         }
     }
 
-    //server variables
-    enum
-    {
-        _VAR_NONE = 0,
-        _VAR_INT = 1,
-        _VAR_FLOAT = 2,
-        _VAR_STRING = 3
-    };
-    
-    enum
-    {
-        _V_NONE=0,
-        _V_BOTNAME,
-        _V_VERBOSE
-    };
-    
     struct _funcdeclaration
     {
         string name;    //function name
@@ -3216,411 +3199,10 @@ namespace server
         void (*func)(const char *cmd, const char *args, clientinfo *ci);
     };
     vector<_funcdeclaration *> _funcs;
-    
-    struct _var_sec
-    {
-        _var_sec() {}
-        _var_sec(const char *n, int p) { name = n; priv = p; }
-        const char *name;
-        int priv;
-    };
-    vector<_var_sec *> _var_priv;    
-    void _init_varpriv()
-    {
-        _var_priv.add(new _var_sec("botname", PRIV_ADMIN));
-//      _var_priv.add(new _var_sec("mastercountbots", PRIV_ADMIN));
-    }
-    
-    struct _varstruct
-    {
-        uint type;
-        
-        char *name;
-        int id;
-        
-        union
-        {
-            int i;
-            float f;
-            char *s;
-        } v;
-    };
-    
-    vector<_varstruct *> _vars;
-    
-    bool _readsnvars(const char *name, char *out, size_t s)
-    {
-        if(!name || !*name) return false;
-        loopv(_vars) if(_vars[i] && _vars[i]->name && !strcmp(name, _vars[i]->name)) switch(_vars[i]->type)
-        {
-            case _VAR_STRING:
-                if(_vars[i]->v.s)
-                {
-                    strncpy(out, _vars[i]->v.s, s);
-                    return true;
-                }
-                else return false;
-            
-            case _VAR_INT:
-                snprintf(out, s, "%i", _vars[i]->v.i);
-                return true;
-            
-            case _VAR_FLOAT:
-                snprintf(out, s, "%.3f", _vars[i]->v.f);
-                return true;
-        }
-        return false;
-    }
-    
-/*
-    char *_getsvars(char *name)
-    {
-        static string bufs[4];
-        static int cbuf=0;
-        
-        if(!name || !*name) return 0;
-        
-        for(int i=0;i<_vars.length();i++)
-        {
-            if(_vars[i] && _vars[i]->name && !strcmp(name, _vars[i]->name))
-            {
-                switch(_vars[i]->type)
-                {
-                    case _VAR_STRING:
-                        return _vars[i]->v.s;
-                    
-                    case _VAR_INT:
-                        cbuf=(cbuf+1)%4;
-                        formatstring(bufs[cbuf])("%i",_vars[i]->v.i);
-                        return bufs[cbuf];
-                    
-                    case _VAR_FLOAT:
-                        cbuf=(cbuf+1)%4;
-                        formatstring(bufs[cbuf])("%.3f",_vars[i]->v.f);
-                        return bufs[cbuf];
-                }
-            }
-        }
-        return 0;
-    }
-*/
 
-    int _getivars(const char *name)
-    {
-        if(!name || !*name) return 0;
-        loopv(_vars) if(_vars[i] && _vars[i]->name && !strcmp(name, _vars[i]->name)) switch(_vars[i]->type)
-        {
-            case _VAR_INT: return _vars[i]->v.i;
-            case _VAR_FLOAT: return int(_vars[i]->v.f);
-            case _VAR_STRING: return atoi(_vars[i]->v.s);
-        }
-        return 0;
-    }
-/*
-    float _getfvars(char *name)
-    {
-        if(!name || !*name) return 0;
-        
-        for(int i=0;i<_vars.length();i++)
-        {
-            if(_vars[i] && _vars[i]->name && !strcmp(name,_vars[i]->name))
-            {
-                switch(_vars[i]->type)
-                {
-                    case _VAR_FLOAT: return _vars[i]->v.f;
-                    case _VAR_INT: return float(_vars[i]->v.i);
-                    case _VAR_STRING: return atof(_vars[i]->v.s);
-                }
-            }
-        }
-        return 0.0;
-    }
-    
-    char *_getsvari(int id)
-    {
-        static string bufs[4];
-        static int cbuf=0;
-        
-        if(!id) return 0;
-        
-        for(int i=0;i<_vars.length();i++)
-        {
-            if(_vars[i] && _vars[i]->id==id)
-            {
-                switch(_vars[i]->type)
-                {
-                    case _VAR_STRING:
-                        return _vars[i]->v.s;
-                    
-                    case _VAR_INT:
-                        cbuf=(cbuf+1)%4;
-                        formatstring(bufs[cbuf])("%i",_vars[i]->v.i);
-                        return bufs[cbuf];
-                    
-                    case _VAR_FLOAT:
-                        cbuf=(cbuf+1)%4;
-                        formatstring(bufs[cbuf])("%.3f",_vars[i]->v.f);
-                        return bufs[cbuf];
-                }
-            }
-        }
-        return 0;
-    }
-    
-    int _getivari(int id)
-    {
-        if(!id) return 0;
-        
-        for(int i=0;i<_vars.length();i++)
-        {
-            if(_vars[i] && _vars[i]->id==id)
-            {
-                switch(_vars[i]->type)
-                {
-                    case _VAR_INT: return _vars[i]->v.i;
-                    case _VAR_FLOAT: return int(_vars[i]->v.f);
-                    case _VAR_STRING: return atoi(_vars[i]->v.s);
-                }
-            }
-        }
-        return 0;
-    }
-    
-    float _getfvari(int id)
-    {
-        if(!id) return 0;
-        
-        for(int i=0;i<_vars.length();i++)
-        {
-            if(_vars[i] && _vars[i]->id==id)
-            {
-                switch(_vars[i]->type)
-                {
-                    case _VAR_FLOAT: return _vars[i]->v.f;
-                    case _VAR_INT: return float(_vars[i]->v.i);
-                    case _VAR_STRING: return atof(_vars[i]->v.s);
-                }
-            }
-        }
-        return 0.0;
-    }
-*/
-    _varstruct *_var_prepare(char *name, int id)
-    {
-        _varstruct *vs = 0;
-        
-        if(!name || !*name) return 0;
-        
-        for(int i=0;i<_vars.length();i++)
-        {
-            if(_vars[i] && _vars[i]->name && !strcmp(_vars[i]->name, name))
-            {
-                vs = _vars[i];
-                if(vs->type==_VAR_STRING && vs->v.s)
-                {
-                    delete[] vs->v.s;
-                    vs->v.s = 0;
-                }
-                if(id) vs->id = id;
-                break;
-            }
-        }
-        if(!vs)
-        {
-            vs = new _varstruct;
-            if(!vs) return 0;
-            
-            _vars.add(vs);
-            
-            int l = strlen(name)+1;
-            if(l>256)
-            {
-                _debug("_var_prepare:l>256");
-                _vars.drop();   //drop last added member
-                delete vs;
-                return 0;
-            }
-            vs->name = new char [l];
-            if(!vs->name)
-            {
-                _debug("_var_prepare:vs->name==0");
-                _vars.drop();
-                delete vs;
-                return 0;
-            }
-            strncpy(vs->name, name, l);
-            vs->id = id;
-            vs->type = _VAR_NONE;   //none type: means that veriable is new and not existed before
-        }
-        
-        return vs;
-    }
-/*    
-    void _setivar(char *name, int id, int v)
-    {
-        _varstruct *vs;
-        
-        vs = _var_prepare(name, id);
-        if(!vs) return;
-        
-        vs->type = _VAR_INT;
-        vs->v.i = v;
-    }
-    
-    void _setfvar(char *name, int id, float v)
-    {
-        _varstruct *vs;
-        
-        vs = _var_prepare(name, id);
-        if(!vs) return;
-        
-        vs->type = _VAR_FLOAT;
-        vs->v.f = v;
-    }
-    
-    void _setsvar(char *name, int id, char *v)
-    {
-        _varstruct *vs;
-        
-        if(!v || !*v) return;
-        
-        vs = _var_prepare(name, id);
-        if(!vs) return;
-        
-        vs->type = _VAR_STRING;
-        
-        int l = strlen(v)+1;
-        if(l>4096) return;      //danger: not cleaned up (why i ever do this check at all???)
-        vs->v.s = new char [l];
-        if(!vs->v.s) return;    //danger: not cleaned up
-        
-        strcpy(vs->v.s, v);
-    }
-*/    
-    int _var_getpriv(char *name)
-    {
-        if(!name) return PRIV_ROOT;
-        
-        loopv(_var_priv)
-        {
-            if(_var_priv[i] && _var_priv[i]->name && !strcmp(name, _var_priv[i]->name)) return _var_priv[i]->priv;
-        }
-        return PRIV_ROOT;
-    }
-    
-    bool _var_checkpriv(char *name, clientinfo *ci)
-    {
-        int cpriv = _getpriv(ci);
-        int vpriv = _var_getpriv(name);
-        return (cpriv>=vpriv)?true:false;
-    }
-    
-    bool _setvarc(char *name, char *v, clientinfo *ci)
-    {
-        if(!name || !*name || !v) return false;
-        
-        int l = strlen(v) + 1;
-        if(l>4096 || l<=0) return false;
-        
-        int cpriv = _getpriv(ci);
-        int vpriv = _var_getpriv(name);
-        
-        if(cpriv<vpriv) return false;
-        
-        _varstruct *vs;
-        vs = _var_prepare(name, 0);
-        if(!vs)
-        {
-            _debug("_setvarc:_var_prepare failed");
-            return false;
-        }
-        
-        if(vs->type)
-        {
-            switch(vs->type)
-            {
-                case _VAR_INT:
-                {
-                    int i = atoi(v);
-                    if(i==0 && strcmp(v, "0"))
-                    {
-                        float f = atof(v);
-                        if(f==0.0 && strcmp(v, "0.0"))
-                        {
-                            vs->v.s = new char [l];
-                            if(!vs->v.s) return false;
-                            strncpy(vs->v.s, v, l);
-                            vs->type = _VAR_STRING;
-                        }
-                        else
-                        {
-                            vs->type = _VAR_FLOAT;
-                            vs->v.f = f;
-                        }
-                    }
-                    else vs->v.i = i;
-                    
-                    break;
-                }
-                
-                case _VAR_FLOAT:
-                {
-                    float f = atof(v);
-                    if(f==0.0 && strcmp(v,"0") && strcmp(v,"0.0"))
-                    {
-                        vs->v.s = new char [l];
-                        if(!vs->v.s) return false;
-                        strncpy(vs->v.s, v, l);
-                        vs->type = _VAR_STRING;
-                    }
-                    else vs->v.f = f;
-                    
-                    break;
-                }
-                
-                case _VAR_STRING:
-                default:
-                {
-                    vs->v.s = new char [l];
-                    if(!vs->v.s) return false;
-                    strncpy(vs->v.s, v, l);
-                    vs->type = _VAR_STRING;
-                    break;
-                }
-            }
-        }
-        else    //new variable
-        {
-            int i = atoi(v);
-            if(i==0 && strcmp(v, "0"))
-            {
-                float f = atof(v);
-                if(f==0.0 && strcmp(v, "0.0"))
-                {
-                    vs->v.s = new char [l];
-                    if(!vs->v.s) return false;
-                    strncpy(vs->v.s, v, l);
-                    vs->type = _VAR_STRING;
-                }
-                else
-                {
-                    vs->type = _VAR_FLOAT;
-                    vs->v.f = f;
-                }
-            }
-            else
-            {
-                vs->type = _VAR_INT;
-                vs->v.i = i;
-            }
-        }
-        
-        return true;
-    }
-    
     void _notify(const char *msg, clientinfo *ci = 0, int priv = 0, bool self = true)
     {
-        loopv(clients) if(clients[i] && ((priv && clients[i]->privilege >= priv) || (self && clients[i]==ci)))
+        loopv(clients) if(clients[i]->state.aitype==AI_NONE && ((priv && clients[i]->privilege >= priv) || (self && clients[i]==ci)))
         {
             sendf(clients[i]->clientnum, 1, "ris", N_SERVMSG, msg);
         }
@@ -3628,7 +3210,7 @@ namespace server
     
     void _notifypriv(const char *msg, int min, int max)
     {
-        loopv(clients) if(clients[i] && (clients[i]->privilege>=min) && (clients[i]->privilege<=max))
+        loopv(clients) if(clients[i]->state.aitype==AI_NONE && (clients[i]->privilege>=min) && (clients[i]->privilege<=max))
             sendf(clients[i]->clientnum, 1, "ris", N_SERVMSG, msg);
     }
     
@@ -3655,8 +3237,6 @@ namespace server
     }
     
 //  >>> Executable functions and extensions
-    //Some dummy functions :D
-    void _test(const char *cmd, const char *args, clientinfo *ci) {}
     void _wall(const char *cmd, const char *args, clientinfo *ci)
     {
         if(!args || !*args) return;
@@ -3734,7 +3314,7 @@ namespace server
     {
         _addmanpage("help man", "[command]", "Shows help about command or prints avaiable commands");
         _addmanpage("info version", "", "Shows information about server");
-        _addmanpage("wall", "<message>", "Prints message on the wall");
+        _addmanpage("wall announce", "<message>", "Prints message on the wall");
         _addmanpage("set", "<varname> <value>", "Sets variable <varname> to <value>");
         _addmanpage("showvars", "", "Shows internal server variables");
         _addmanpage("mute", "[cn]", "Mutes one or all players");
@@ -3778,7 +3358,7 @@ namespace server
         {
             if(!ci) return;
             copystring(msg, "\f0[HELP] \f1Possible commands:", MAXTRANS);
-            sendf(ci->clientnum, 1, "ris", N_SERVMSG, msg);
+            sendf(ci->ownernum, 1, "ris", N_SERVMSG, msg);
             for(int priv = 0; priv<=min(_getpriv(ci), int(PRIV_ROOT)); priv++)
             {
                 first  = true;
@@ -3799,7 +3379,7 @@ namespace server
                     else concatstring(msg, ", ", MAXTRANS);
                     concatstring(msg, _funcs[i]->name, MAXTRANS);
                 }
-                if(!first) sendf(ci->clientnum, 1, "ris", N_SERVMSG, msg);
+                if(!first) sendf(ci->ownernum, 1, "ris", N_SERVMSG, msg);
             }
             return;
         }
@@ -3808,49 +3388,49 @@ namespace server
         
         if(!_manpages.length()) _initman();
         
-        _search:
-            found = false;
-            loopv(_manpages) if(_manpages[i])
+    _search:
+        found = false;
+        loopv(_manpages) if(_manpages[i])
+        {
+            char name[256];
+            char *names[16];
+            int c;
+
+            copystring(name, _manpages[i]->name, 256);
+            c = _argsep(name, 16, names);
+            for(int j = 0; j < c; j++)
             {
-                char name[256];
-                char *names[16];
-                int c;
-                
-                copystring(name, _manpages[i]->name, 256);
-                c = _argsep(name, 16, names);
-                for(int j = 0; j < c; j++)
+                if(!strcmp(args, names[j]))
                 {
-                    if(!strcmp(args, names[j]))
+                    if(usage && _manpages[i]->args[0] != 0)
                     {
-                        if(usage && _manpages[i]->args[0] != 0)
-                        {
-                            formatstring(msg)("\f1[HELP] Usage: \f0%s \f2%s", args, _manpages[i]->args);
-                        }
-                        else if(_manpages[i]->args[0] == 0 && _manpages[i]->help[0] != 0)
-                        {
-                            formatstring(msg)("\f1[HELP] \f2%s", _manpages[i]->help);
-                        }
-                        else if(_manpages[i]->args[0] != 0 && _manpages[i]->help[0] != 0)
-                        {
-                            formatstring(msg)("\f1[HELP] Usage: \f0%s \f2%s\n\f1[HELP] Description: \f2%s",
-                                args, _manpages[i]->args, _manpages[i]->help);
-                        }
-                        else formatstring(msg)("\f1[HELP] \f3Internal system error");
-                    
-                        found = true;
-                        break;
+                        formatstring(msg)("\f1[HELP] Usage: \f0%s \f2%s", args, _manpages[i]->args);
                     }
+                    else if(_manpages[i]->args[0] == 0 && _manpages[i]->help[0] != 0)
+                    {
+                        formatstring(msg)("\f1[HELP] \f2%s", _manpages[i]->help);
+                    }
+                    else if(_manpages[i]->args[0] != 0 && _manpages[i]->help[0] != 0)
+                    {
+                        formatstring(msg)("\f1[HELP] Usage: \f0%s \f2%s\n\f1[HELP] Description: \f2%s",
+                            args, _manpages[i]->args, _manpages[i]->help);
+                    }
+                    else formatstring(msg)("\f1[HELP] \f3Internal system error");
+
+                    found = true;
+                    break;
                 }
-                if(found) break;
             }
-        
+            if(found) break;
+        }
+
         if(!found)
         {
             if((++searchc) < 3 && _readmanfile(args)) goto _search;
             else formatstring(msg)("\f1[HELP] \f2Man-page for command \f0%s \f2not found.", args);
         }
         
-		sendf(ci?ci->clientnum:-1, 1, "ris" , N_SERVMSG, msg);
+		sendf(ci ? ci->ownernum : -1, 1, "ris" , N_SERVMSG, msg);
     }
     
     void _showgbans(const char *cmd, const char *args, clientinfo *ci)
@@ -3858,7 +3438,7 @@ namespace server
         union { uchar b[sizeof(enet_uint32)]; enet_uint32 i; } ip, mask;
         string msg;
         if(!ci) return;
-        int sender = ci->clientnum;
+        int sender = ci->ownernum;
         sendf(sender, 1, "ris", N_SERVMSG, "\f3gban list:");
         loopv(gbans)
         {
@@ -3872,54 +3452,6 @@ namespace server
         }
     }
     
-    void _showvars(const char *cmd, const char *args, clientinfo *ci)
-    {
-        string msg;
-        
-        if(!ci) return;
-        for(int i=0;i<_vars.length();i++)
-        {
-            if(!_vars[i])
-            {
-                formatstring(msg)("\fs\f2[VAR]\fr %i doesnt exist", i);
-                sendf(ci->clientnum, 1, "ris", N_SERVMSG, msg);
-                continue;
-            }
-            switch(_vars[i]->type)
-            {
-                case _VAR_STRING:
-                    formatstring(msg)("\fs\f2[VAR]\fr [string] name=\"%s\" v=\"%s\"",
-                        _vars[i]->name?_vars[i]->name:"???", _vars[i]->v.s?_vars[i]->v.s:"???");
-                    break;
-                case _VAR_INT:
-                    formatstring(msg)("\fs\f2[VAR]\fr [int] name=\"%s\" v=%i",
-                        _vars[i]->name?_vars[i]->name:"???", _vars[i]->v.i);
-                    break;
-                case _VAR_FLOAT:
-                    formatstring(msg)("\fs\f2[VAR]\fr [float] name=\"%s\" v=%f",
-                        _vars[i]->name?_vars[i]->name:"???", _vars[i]->v.f);
-                    break;
-                default:
-                    formatstring(msg)("\fs\f2[VAR]\fr [???:%i] name=\"%s\" v=0x%x",
-                        _vars[i]->type, _vars[i]->name?_vars[i]->name:"???", _vars[i]->v.i);
-                    break;
-            }
-            sendf(ci->clientnum, 1, "ris", N_SERVMSG, msg);
-        }
-        for(int i=0;i<_var_priv.length();i++)
-        {
-            if(!_var_priv[i])
-            {
-                formatstring(msg)("\fs\f3[VARSEC]\fr %i doesnt exists", i);
-                sendf(ci->clientnum, 1, "ris", N_SERVMSG, msg);
-                continue;
-            }
-            formatstring(msg)("\fs\f3[VARSEC]\fr name=\"%s\" priv=%i",
-                _var_priv[i]->name?_var_priv[i]->name:"???", _var_priv[i]->priv);
-            sendf(ci->clientnum, 1, "ris", N_SERVMSG, msg);
-        }
-    }
-    
     void _spectate(clientinfo *ci, bool val)
     {
         if(!ci || (ci->state.state==CS_SPECTATOR ? val : !val)) return;
@@ -3929,7 +3461,7 @@ namespace server
             if(smode) smode->leavegame(ci);
             ci->state.state = CS_SPECTATOR;
             ci->state.timeplayed += lastmillis - ci->state.lasttimeplayed;
-            if(/*!ci->local && */!ci->privilege) aiman::removeai(ci);
+            if(!ci->privilege) aiman::removeai(ci);
         }
         else if(ci->state.state==CS_SPECTATOR && !val)
         {
@@ -3945,15 +3477,15 @@ namespace server
     
     void _forcespectator(clientinfo *ci, int spec)
     {
-		string msg;
+        string msg;
         if(ci)
         {
             if(ci->state.aitype == AI_NONE)
             {
                 _spectate(ci, (spec));
                 ci->_xi.forcedspectator = spec;
-				formatstring(msg)("You are %sspectated%s", spec?"\f3":"\f0un", (spec == 1)?" \f7for this match":"");
-				sendf(ci->clientnum, 1, "ris", N_SERVMSG, msg);
+                formatstring(msg)("You are %sspectated%s", spec ? "\f3" : "\f0un", (spec == 1) ? " \f7for this match" : "");
+                sendf(ci->ownernum, 1, "ris", N_SERVMSG, msg);
             }
         }
         else
@@ -3963,8 +3495,8 @@ namespace server
                 _spectate(clients[i], (spec));
                 clients[i]->_xi.forcedspectator = spec;
             }
-            formatstring(msg)("All players are %sspectated%s", spec?"\f3":"\f0un", (spec == 1)?" \f7for this match":"");
-			sendf(-1, 1, "ris", N_SERVMSG, msg);
+            formatstring(msg)("All players are %sspectated%s", spec ? "\f3" : "\f0un", (spec == 1) ? " \f7for this match" : "");
+            sendf(-1, 1, "ris", N_SERVMSG, msg);
         }
     }
     
@@ -3981,7 +3513,7 @@ namespace server
                 _man("usage", cmd, ci);
                 return;
             }
-            clientinfo *cx = getinfo(cn);
+            clientinfo *cx = (clientinfo *)getclientinfo(cn);
             if(!cx)
             {
                 defformatstring(msg)("\f2[FAIL] Unknown client number \f0%i", cn);
@@ -3994,18 +3526,19 @@ namespace server
     
     void _editmute(clientinfo *ci, int val)
     {
-		string msg;
+        string msg;
         if(ci)
-		{
-			ci->_xi.editmute = val;
-			formatstring(msg)("Your editing is %smuted%s", val?"\f3":"\f0un", (val == 1)?" \f7for this map":"");
-		}
+        {
+            ci->_xi.editmute = val;
+            formatstring(msg)("Your editing is %smuted%s", val ? "\f3" : "\f0un", (val == 1) ? " \f7for this map" : "");
+        }
         else
         {
             loopv(clients) clients[i]->_xi.editmute = val;
-			formatstring(msg)("All players editing is %smuted%s", val?"\f3":"\f0un", (val == 1)?" \f7for this map":"");
+            formatstring(msg)("All players editing is %smuted%s", val ? "\f3" : "\f0un", (val == 1) ? " \f7for this map" : "");
         }
-        sendf(ci?ci->clientnum:-1, 1, "ris", N_SERVMSG, msg);
+        if(!ci || ci->state.aitype == AI_NONE)
+            sendf( ci ? ci->clientnum : -1, 1, "ris", N_SERVMSG, msg);
     }
     
     void _editmutefunc(const char *cmd, const char *args, clientinfo *ci)
@@ -4021,12 +3554,12 @@ namespace server
             int cn = atoi(argv[0]);
             if(!cn && strcmp(argv[0], "0"))
             {
-				if(ci && !strcmp(argv[0], "me")) cn = ci->clientnum;
-				else
-				{
-					_man("usage", cmd, ci);
-					return;
-				}
+                if(ci && !strcmp(argv[0], "me")) cn = ci->clientnum;
+                else
+                {
+                    _man("usage", cmd, ci);
+                    return;
+                }
             }
             clientinfo *cx = getinfo(cn);
             if(!cx)
@@ -4036,28 +3569,29 @@ namespace server
                 return;
             }
             if(argv[1] && *argv[1])
-			{
-				val = atoi(argv[1]);
-				if(!val && strcmp(argv[1], "0")) val = 1;
-			}
+            {
+                val = atoi(argv[1]);
+                if(!val && strcmp(argv[1], "0")) val = 1;
+            }
             _editmute(cx, val);
         }
     }
     
     void _mute(clientinfo *ci, int val)
     {
-		string msg;
+        string msg;
         if(ci)
-		{
-			ci->_xi.mute = val;
-			formatstring(msg)("You are %smuted%s", val?"\f3":"\f0un", (val == 1)?" \f7for this match":"");
-		}
+        {
+            ci->_xi.mute = val;
+            formatstring(msg)("You are %smuted%s", val?"\f3":"\f0un", (val == 1)?" \f7for this match":"");
+        }
         else
         {
             loopv(clients) if(clients[i]) clients[i]->_xi.mute = val;
-			formatstring(msg)("All players are %smuted%s", val?"\f3":"\f0un", (val == 1)?" \f7for this match":"");
+            formatstring(msg)("All players are %smuted%s", val?"\f3":"\f0un", (val == 1)?" \f7for this match":"");
         }
-        sendf(ci?ci->clientnum:-1, 1, "ris", N_SERVMSG, msg);
+        if(!ci || ci->state.aitype == AI_NONE)
+            sendf(ci ? ci->clientnum : -1, 1, "ris", N_SERVMSG, msg);
     }
     
     void _mutefunc(const char *cmd, const char *args, clientinfo *ci)
@@ -4066,19 +3600,19 @@ namespace server
         if(!args || !*args) _mute(0, val);
         else
         {
-			string buf;
-			char *argv[2];
-			copystring(buf, args);
-			_argsep(buf, 2, argv);
+            string buf;
+            char *argv[2];
+            copystring(buf, args);
+            _argsep(buf, 2, argv);
             int cn = atoi(argv[0]);
             if(!cn && strcmp(argv[0], "0"))
             {
-				if(ci && !strcmp(argv[0], "me")) cn = ci->clientnum;
-				else
-				{
-					_man("usage", cmd, ci);
-					return;
-				}
+                if(ci && !strcmp(argv[0], "me")) cn = ci->clientnum;
+                else
+                {
+                    _man("usage", cmd, ci);
+                    return;
+                }
             }
             clientinfo *cx = getinfo(cn);
             if(!cx)
@@ -4099,7 +3633,7 @@ namespace server
     void _spy(clientinfo *ci, bool val)
     {
         
-        if(!ci || (ci->_xi.spy ? val : !val)) return;
+        if(!ci || (ci->_xi.spy ? val : !val) || ci->state.aitype != AI_NONE) return;
         ci->_xi.spy = val;
         if(val)
         {
@@ -4164,7 +3698,7 @@ namespace server
                     _man("usage", cmd, ci);
                     return;
                 }
-                clientinfo *cx = getinfo(cn);
+                clientinfo *cx = (clientinfo *)getclientinfo(cn);
                 if(!cx)
                 {
                     defformatstring(msg)("\f2[FAIL] Unknown client number \f0%i", cn);
@@ -4180,48 +3714,7 @@ namespace server
             }
         }
     }
-    
-    void _set(const char *cmd, const char *args, clientinfo *ci)
-    {
-        string buf;
-        char *argv[2];
-        
-        if(!args) return;
-        
-        copystring(buf, args);
-        
-        _argsep(buf, 2, argv);
-        if(!argv[0] || !argv[0][0] || !argv[1] || !argv[1][0]) return;
-        
-        string msg;
-        
-        bool success;
-        success = _setvarc(argv[0], argv[1], ci);
-        
-        if(success)
-        {
-            formatstring(msg)("\f0[VAR] \f7%s=%s", argv[0], argv[1]);
-            int pr = _var_getpriv(argv[0]);
-            if(pr==PRIV_NONE) sendf(-1, 1, "ris", N_SERVMSG, msg);
-            else
-            {
-                for(int i=0;i<clients.length();i++)
-                {
-                    if(_getpriv(clients[i])>=pr) sendf(clients[i]->clientnum, 1, "ris", N_SERVMSG, msg);
-                }
-            }
-        }
-        else if(ci)
-        {
-            formatstring(msg)("\f1[VAR] \f7Failed to set variable %s", argv[0]);
-            sendf(ci->clientnum, 1, "ris", N_SERVMSG, msg);
-        }
-        else
-        {
-            logoutf("Failed to set variable %s to value %s", argv[0], argv[1]);
-        }
-    }
-    
+
     struct _pluginfunc
     {
         char name[64];
@@ -4511,30 +4004,37 @@ namespace server
         }
     }
     
-    void _ssetvar(const char *cmd, const char *args, clientinfo *ci)
+    void _setvar(const char *cmd, const char *args, clientinfo *ci)
 	{
-		if(!cmd || !*cmd) return;
-		if(!args || !*args)
+		if(!cmd || !cmd[0]) return;
+        if(args && args[0]) setvar(cmd, atoi(args));
+        else
 		{
 			defformatstring(msg)("%s = %i", cmd, getvar(cmd));
 			if(ci) sendf(ci->clientnum, 1, "ris", N_SERVMSG, msg);
+            else logoutf(msg);
 		}
-		else setvar(cmd, atoi(args));
-		//TODO maybe broadcast change
 	}
 	
-	void _ssetsvar(const char *cmd, const char *args, clientinfo *ci)
+	void _setsvar(const char *cmd, const char *args, clientinfo *ci)
 	{
-		//string buf;
-		if(!cmd || !*cmd) return;
-		setsvar(cmd, args?:"");
-		//TODO maybe broadcast change
+		if(!cmd || !cmd[0]) return;
+		setsvar(cmd, args ? args : "");
 	}
-    
+
+    /*
+    void _setvarfunc(const char *cmd, const char *args, clientinfo *ci)
+    {
+        string buf;
+        char *argv[2];
+        
+    }
+    */
+
     void _pm(const char *cmd, const char *args, clientinfo *ci)
     {
         char *argv[2];
-        char *cns[16];
+        char *cns[32];
         int cnc;
         string buf;
         string msg;
@@ -4551,13 +4051,13 @@ namespace server
         
         if(!argv[1] || !*argv[1]) return;
         
-        cnc = _argsep(argv[0], 16, cns, ',');
+        cnc = _argsep(argv[0], 32, cns, ',');
         
         vector<int> clientnums;
-        for(int i = 0; i < min(cnc, 16); i++)
+        loopi(cnc)
         {
             int j = atoi(cns[i]);
-            if(j==0 && *cns[i]!='0')
+            if((j == 0 && *cns[i] != '0') || !getclientinfo(j))
             {
                 if(ci)
                 {
@@ -4568,17 +4068,14 @@ namespace server
                 else return;
             }
             bool exists = false;
-            loopvk(clientnums) if(j == clientnums[k]) exists = true;
+            for(int k = clientnums.length() - 1; k >= 0; k--)
+                if(j == clientnums[k]) { exists = true; break; }
             if(!exists) clientnums.add(j);
         }
         
         formatstring(msg)("\f1[PM:\f0%i\f1:\f7%s\f1] \f0%s", ci->clientnum, colorname(ci), argv[1]);
         
-        loopv(clientnums)
-        {
-            int j = clientnums[i];
-            if(getclientinfo(j)) sendf(j, 1, "ris", N_SERVMSG, msg);            
-        }
+        loopvrev(clientnums) sendf(clientnums[i], 1, "ris", N_SERVMSG, msg);            
     }
     
     void _setpriv(const char *cmd, const char *args, clientinfo *ci)
@@ -4690,7 +4187,7 @@ namespace server
             return;
         }
         
-        cx = getinfo(cn);
+        cx = (clientinfo *)getclientinfo(cn);
         if(!cx)
         {
             defformatstring(msg)("\f2[FAIL] Unknown client number \f0%i", cn);
@@ -4699,7 +4196,10 @@ namespace server
         }
         
         if(_getpriv(ci)>=PRIV_ROOT ||
-            ((_getpriv(ci)>_getpriv(cx) || cx==ci) && (privilege>=0) && (cx->privilege!=privilege) && (_getpriv(ci)>=privilege)))
+            ((_getpriv(ci)>_getpriv(cx) || cx==ci) &&
+            (privilege>=0) &&
+            (cx->privilege!=privilege) &&
+            (_getpriv(ci)>=privilege)))
         {
             defformatstring(msg)("%s %s %s", colorname(cx), privilege?"claimed":"relinquished", privname(privilege?privilege:cx->privilege));
             cx->privilege = privilege;
@@ -4729,8 +4229,8 @@ namespace server
     void _np(const char *cmd, const char *args, clientinfo *ci)
     {
         string msg;
-        if(!ci || !m_teammode) return;
-        if(!ci->_xi.tkiller)
+        if(!ci) return;
+        if(!m_teammode || !ci->_xi.tkiller)
         {
             formatstring(msg)("\f1[FORGIVE] no teamkills to forgive");
             sendf(ci->clientnum, 1, "ris", N_SERVMSG, msg);
@@ -4738,8 +4238,11 @@ namespace server
         }
         ci->_xi.tkiller->state.teamkills--;
         addteamkill(ci->_xi.tkiller, ci, -1);
-        formatstring(msg)("\f1[FORGIVE] \f7%s \f0forgave \f1your \f3teamkill", colorname(ci));
-        sendf(ci->_xi.tkiller->clientnum, 1, "ris", N_SERVMSG, msg);
+        if(ci->_xi.tkiller->state.aitype == AI_NONE)
+        {
+            formatstring(msg)("\f1[FORGIVE] \f7%s \f0forgave \f1your \f3teamkill", colorname(ci));
+            sendf(ci->_xi.tkiller->clientnum, 1, "ris", N_SERVMSG, msg);
+        }
         formatstring(msg)("\f1[FORGIVE] \f7%s \f1teamkill forgiven", colorname(ci->_xi.tkiller));
         sendf(ci->clientnum, 1, "ris", N_SERVMSG, msg);
         ci->_xi.tkiller = 0;
@@ -4822,7 +4325,7 @@ namespace server
         int cn;
         if(!m_edit)
         {
-            if(ci) sendf(ci->clientnum, 1, "ris", N_SERVMSG, "\f2[FAIL] This isnt edit mode");
+            if(ci) sendf(ci->clientnum, 1, "ris", N_SERVMSG, "\f2[FAIL] This is not edit mode");
             return;
         }
         cn = atoi(args);
@@ -4938,11 +4441,11 @@ namespace server
         static int timesugg = 0;    //suggestions timeout
         if(!timeout || totalmillis - timeout >= 2*60*1000)
         {
-            timeout = totalmillis;    //timed out: clear all votekicks except current voter
+            timeout = totalmillis ? totalmillis : 1;    //timed out: clear all votekicks except current voter
             loopv(clients) if(clients[i] != actor) clients[i]->_xi.votekickvictim = -1;
         }
         if(nc < 5) return;  //dont check if less than 5 players
-        loopv(clients) if(clients[i]->_xi.votekickvictim >= 0)
+        loopv(clients) if(clients[i]->state.aitype == AI_NONE && clients[i]->_xi.votekickvictim >= 0)
         {
             int cn = clients[i]->_xi.votekickvictim;
             clientinfo *ci = (clientinfo *)getclientinfo(cn);
@@ -4979,7 +4482,7 @@ namespace server
 
         if(!timestat || totalmillis - timestat >= 2000)  //display stats each 2 voting secconds
         {
-            timestat = totalmillis;
+            timestat = totalmillis ? totalmillis : 1;
             formatstring(msg)("\f3[votekick]");
             loopv(votes)
             {
@@ -4993,7 +4496,7 @@ namespace server
             
             if(!timesugg || totalmillis - timesugg >= 5000)  //display suggestions each 5 voting secconds
             {
-                timesugg = totalmillis;
+                timesugg = totalmillis ? totalmillis : 1;
                 sendf(-1, 1, "ris", N_SERVMSG, "\f3[votekick] \f2use \f0/kick \f2or \f0#votekick \f2to vote for kicking");
             }
         }
@@ -5039,7 +4542,7 @@ namespace server
     void _stats(const char *cmd, const char *args, clientinfo *ci)
     {
         vector<clientinfo *> cns;
-        char *argv[16];
+        char *argv[32];
         int cnc;
         string buf;
         string msg;
@@ -5047,11 +4550,11 @@ namespace server
         if(args) copystring(buf, args);
         else buf[0]=0;
             
-        if(args && strchr(args,',')) cnc = _argsep(buf, 16, argv, ',');
-        else cnc = _argsep(buf, 16, argv);
+        if(args && strchr(args,',')) cnc = _argsep(buf, 32, argv, ',');
+        else cnc = _argsep(buf, 32, argv);
         
         //parse clientnums
-        for(int i=0;i<cnc;i++)
+        loopi(cnc)
         {
             int cn = atoi(argv[i]);
             if(!cn && argv[i][0]!='0') continue;
@@ -5089,7 +4592,7 @@ namespace server
         int sendcn = ci ? ci->clientnum : -1;
         loopv(cns)
         {
-            clientinfo *cx=cns[i];
+            clientinfo *cx = cns[i];
             if(!m_teammode)
             {
                 formatstring(msg)("\f1[STATS:\f7%s\f1] \f2kills:\f0%i \f2deaths:\f0%i \f2kpd:\f0%.3f \f2acc:\f0%i%%",
@@ -5145,7 +4648,7 @@ namespace server
         }
         uint ip = getclientip(cx->clientnum);
         formatstring(msg)("\fs\f1[IP:\f0%i\f1:\f7%s\f1] \f5%i.%i.%i.%i\fr", cn, colorname(cx), ip&0xFF, (ip>>8)&0xFF, (ip>>16)&0xFF, (ip>>24)&0xFF);
-        sendf(ci?ci->clientnum:-1, 1, "ris", N_SERVMSG, msg);
+        sendf(ci ? ci->clientnum : -1, 1, "ris", N_SERVMSG, msg);
     }
     
     void _info(const char *cmd, const char *args, clientinfo *ci)
@@ -5262,28 +4765,26 @@ namespace server
 //  >>> Server internals
     
     static void _addfunc(const char *s, int priv, void (*_func)(const char *cmd, const char *args, clientinfo *ci))
-	{
-		char buf[MAXTRANS];
-		int argc;
-		char *argv[260];
-		copystring(buf, s, MAXTRANS);
-		argc = _argsep(buf, 260, argv);
-		for(int i = 0; i < argc; i++) if(argv[i]) _funcs.add(new _funcdeclaration(argv[i], priv, _func));
-	}
+    {
+        char buf[MAXTRANS];
+        int argc;
+        char *argv[260];
+        copystring(buf, s, MAXTRANS);
+        argc = _argsep(buf, 260, argv);
+        for(int i = 0; i < argc; i++) if(argv[i]) _funcs.add(new _funcdeclaration(argv[i], priv, _func));
+    }
     
     void _initfuncs()
     {
-        _init_varpriv();
-        
-        _addfunc("wall", PRIV_MASTER, _wall);
+        _addfunc("wall announce", PRIV_AUTH, _wall);
         _addfunc("help man", 0, _man);
         _addfunc("info", 0, _info);
         _addfunc("version", 0, _info);
         _addfunc("pm", 0, _pm);
         _addfunc("exec", PRIV_ROOT, _exec);
         _addfunc("stats", 0, _stats);
-        _addfunc("set", 0, _set);
-        _addfunc("vars", PRIV_ADMIN, _showvars);
+        //_addfunc("set", 0, _set);
+        //_addfunc("vars", PRIV_ADMIN, _showvars);
         _addfunc("load reload unload", PRIV_ROOT, _load);
         _addfunc("getip", PRIV_ADMIN, _getip);
         _addfunc("priv setpriv setmaster givemaster", PRIV_MASTER, _setpriv);
@@ -5344,7 +4845,7 @@ namespace server
                 if(_funcs[i] && _checkpriv(ci, _funcs[i]->priv))
                 {
                     //execute function
-                    _funcs[i]->func(argv[0], argv[1]?:"", ci);
+                    _funcs[i]->func(argv[0], argv[1] ? argv[1] : "", ci);
                 }
                 else _privfail(ci);
                 executed=true;
@@ -5372,8 +4873,10 @@ namespace server
     }
     
     ICOMMAND(zexec, "C", (char *cmd), _servcmd(cmd, 0));
-    ICOMMAND(zload, "C", (char *cmd), _load("load", cmd, 0));
-    ICOMMAND(zset, "C", (char *cmd), _set("set", cmd, 0));
+    ICOMMAND(zload, "C", (char *modulename), _load("load", modulename, 0));
+    //ICOMMAND(zset, "C", (char *setting), _set("set", setting, 0));
+    ICOMMAND(zwall, "C", (char *message), _wall(0, message, 0));
+    ICOMMAND(announce, "C", (char *message), _wall(0, message, 0));
     
 // ****************************************************************************************
 
@@ -5869,7 +5372,7 @@ namespace server
                     {
                         sendf(sender, 1, "ris", N_SERVMSG,
                               "\f5[MUTE] \f3Your editing is muted");
-                        ci->_xi.editmutewarn = totalmillis;
+                        ci->_xi.editmutewarn = totalmillis ? totalmillis : 1;
                     }
                     break;
                 }
@@ -5895,7 +5398,7 @@ namespace server
                     {
                         sendf(sender, 1, "ris", N_SERVMSG,
                               "\f5[MUTE] \f3Your editing is muted");
-                        ci->_xi.editmutewarn = totalmillis;
+                        ci->_xi.editmutewarn = totalmillis ? totalmillis : 1;
                     }
                     break;
                 }
@@ -5931,7 +5434,7 @@ namespace server
                     {
                         sendf(sender, 1, "ris", N_SERVMSG,
                               "\f5[MUTE] \f3Your editing is muted");
-                        ci->_xi.editmutewarn = totalmillis;
+                        ci->_xi.editmutewarn = totalmillis ? totalmillis : 1;
                     }
                     break;
                 }
@@ -6119,7 +5622,7 @@ namespace server
                     {
                         sendf(sender, 1, "ris", N_SERVMSG,
                               "\f5[MUTE] \f3Your newmap was muted");
-                        ci->_xi.editmutewarn = totalmillis;
+                        ci->_xi.editmutewarn = totalmillis ? totalmillis : 1;
                     }
                     break;
                 }
@@ -6256,7 +5759,7 @@ namespace server
                     {
                         sendf(sender, 1, "ris", N_SERVMSG,
                               "\f5[MUTE] \f3Your editing is muted");
-                        ci->_xi.editmutewarn = totalmillis;
+                        ci->_xi.editmutewarn = totalmillis ? totalmillis : 1;
                     }
                     break;
                 }
@@ -6278,7 +5781,7 @@ namespace server
                     {
                         sendf(sender, 1, "ris", N_SERVMSG,
                               "\f5[MUTE] \f3Your editing is muted");
-                        ci->_xi.editmutewarn = totalmillis;
+                        ci->_xi.editmutewarn = totalmillis ? totalmillis : 1;
                     }
                     break;
                 }

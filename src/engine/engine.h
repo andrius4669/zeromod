@@ -4,6 +4,17 @@
 #include "cube.h"
 #include "world.h"
 
+// command
+extern void checksleep(int millis);
+extern void clearsleep(bool clearoverrides = true);
+
+extern hashset<ident> idents;
+extern int identflags;
+
+extern void clearoverrides();
+extern void writecfg(const char *name = NULL);
+
+
 #ifndef STANDALONE
 
 #include "octa.h"
@@ -460,16 +471,6 @@ extern void localservertoclient(int chan, ENetPacket *packet);
 extern void connectserv(const char *servername, int port, const char *serverpassword);
 extern void abortconnect();
 extern void clientkeepalive();
-
-// command
-extern hashset<ident> idents;
-extern int identflags;
-
-extern void clearoverrides();
-extern void writecfg(const char *name = NULL);
-
-extern void checksleep(int millis);
-extern void clearsleep(bool clearoverrides = true);
 
 // console
 extern void keypress(int code, bool isdown, int cooked);

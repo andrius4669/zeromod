@@ -7,6 +7,7 @@
 
 static FILE *logfile = NULL;
 volatile bool reloadcfg = false;
+volatile bool modifyhost = false;
 SVAR(configfile, "server-init.cfg");
 
 void closelogfile()
@@ -178,7 +179,13 @@ void cleanupserver()
     pongsock = lansock = ENET_SOCKET_NULL;
 }
 
-VARF(maxclients, 0, DEFAULTCLIENTS, MAXCLIENTS, { if(!maxclients) maxclients = DEFAULTCLIENTS; });
+VARF(serveruprate, 0, 0, INT_MAX, { if(serverhost) modifyhost = true; });
+SVAR(serverip, ""); //TODO recreate host if serverhost exist
+VARF(serverport, 0, server::serverport(), 0xFFFF, { if(!serverport) serverport = server::serverport(); });
+
+VARF(maxclients, 0, DEFAULTCLIENTS, MAXCLIENTS, {
+    if(!maxclients) maxclients = DEFAULTCLIENTS;
+});
 VARF(maxdupclients, 0, 0, MAXCLIENTS, { if(serverhost) serverhost->duplicatePeers = maxdupclients ? maxdupclients : MAXCLIENTS; });
 
 void process(ENetPacket *packet, int sender, int chan);
@@ -413,7 +420,7 @@ ENetSocket connectmaster(bool wait)
         else if(!enet_socket_connect(sock, &masteraddress)) return sock;
     }
     enet_socket_destroy(sock);
-    if(isdedicatedserver()) logoutf("could not connect to master server");
+    logoutf("could not connect to master server");
     return ENET_SOCKET_NULL;
 }
 
@@ -582,10 +589,6 @@ void checkserversockets()        // reply all server info requests
     }
 }
 
-VAR(serveruprate, 0, 0, INT_MAX);
-SVAR(serverip, "");
-VARF(serverport, 0, server::serverport(), 0xFFFF, { if(!serverport) serverport = server::serverport(); });
-
 int curtime = 0, lastmillis = 0, totalmillis = 0;
 
 void updatemasterserver()
@@ -628,6 +631,7 @@ void serverslice(bool dedicated, uint timeout)   // main server update, called f
     lastmillis += curtime;
     totalmillis = millis;
     updatetime();
+    checksleep(lastmillis);
 
     server::serverupdate();
 
@@ -1020,7 +1024,7 @@ bool setuplistenserver(void)
         if(enet_address_set_host(&address, serverip)<0) conoutf(CON_WARN, "WARNING: server ip not resolved");
         else serveraddress.host = address.host;
     }
-    serverhost = enet_host_create(&address, min(maxclients + server::reserveclients(), MAXCLIENTS*2), server::numchannels(), 0, serveruprate);
+    serverhost = enet_host_create(&address, min(maxclients + server::reserveclients(), MAXCLIENTS), server::numchannels(), 0, serveruprate);
     if(!serverhost) return servererror("could not create server host");
     serverhost->duplicatePeers = maxdupclients ? maxdupclients : MAXCLIENTS;
     loopi(maxclients) serverhost->peers[i].data = NULL;
@@ -1073,7 +1077,7 @@ bool serveroption(char *opt)
         case 'q': logoutf("Using home directory: %s", opt); sethomedir(opt+2); return true;
         case 'k': logoutf("Adding package directory: %s", opt); addpackagedir(opt+2); return true;
         case 'g': logoutf("Setting log file: %s", opt); setlogfile(opt+2); return true;
-        case 's': setsvar("configfile", opt+2); return true;
+        case 's': logoutf("Setting configuration file: %s", opt+2); setsvar("configfile", opt+2); return true;
         default: return false;
     }
 }
