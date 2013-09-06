@@ -11,8 +11,8 @@ enum
 
 static const struct { const char *name; } cheats[AC_MAX] =
 {
-    "unknown",
-    "gunhack",
-    "poshack",
-    "flaghack"
+    {"unknown"},
+    {"gunhack"},
+    {"poshack"},
+    {"flaghack"}
 };
