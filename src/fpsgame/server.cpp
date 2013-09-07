@@ -745,7 +745,7 @@ namespace server
     VAR(servercheckgbans, 0, 1, 2);                 //decides if server checks gbans (0=no;1=yes;2=checkifnoadminexists)
     VAR(serverhideip, 0, 0, 1);                     //protects users privacy; disables showing ip in cube server listener
     VAR(beststats, 0, 1, 1);                        //show best stats
-    FVAR(serverintermission, 1.0, 10.0, 3600.0);    //intermission interval (in secconds)
+    FVAR(serverintermission, 1.0, 10.0, 3600.0);    //intermission interval (in seconds)
     VAR(serversuggestnp, 0, 1, 1);                  //decides if server suggest players to say #np
     SVAR(commandchars, "#");                        //defines characters which are interepted as command starting characters
     
@@ -1587,14 +1587,12 @@ namespace server
             else formatstring(msg)("%s claimed %s as '\fs\f5%s\fr'", colorname(ci), name, authname);
         } 
         else formatstring(msg)("%s %s %s", colorname(ci), val ? "claimed" : "relinquished", name);
-        string ftext;
-        filtertext(ftext, msg);
-        logoutf(ftext);
+        logoutf(msg);
         packetbuf p(MAXTRANS, ENET_PACKET_FLAG_RELIABLE);
         putint(p, N_SERVMSG);
         sendstring(msg, p);
         _putmaster(p);
-        sendpacket((!ci->_xi.spy) ? -1 : ci->clientnum, 1, p.finalize());
+        sendpacket((!ci->_xi.spy) ? -1 : ci->ownernum, 1, p.finalize());
         checkpausegame();
         return true;
     }
@@ -2924,8 +2922,6 @@ namespace server
        
     int allowconnect(clientinfo *ci, const char *pwd = "")
     {
-        //if(ci->local) return DISC_NONE;
-        //if(!m_mp(gamemode)) return DISC_LOCAL;
         if(serverpass[0])
         {
             if(!checkpassword(ci, serverpass, pwd)) return DISC_PASSWORD;
@@ -2944,7 +2940,7 @@ namespace server
 
     bool allowbroadcast(int n)
     {
-        clientinfo *ci = getinfo(n);
+        clientinfo *ci = (clientinfo *)getclientinfo(n);
         return ci && ci->connected;
     }
 
@@ -4480,7 +4476,7 @@ namespace server
             votes.remove(i);
         }
 
-        if(!timestat || totalmillis - timestat >= 2000)  //display stats each 2 voting secconds
+        if(!timestat || totalmillis - timestat >= 2000)  //display stats each 2 voting seconds
         {
             timestat = totalmillis ? totalmillis : 1;
             formatstring(msg)("\f3[votekick]");
@@ -4494,7 +4490,7 @@ namespace server
             concatstring(msg, buf);
             sendf(-1, 1, "ris", N_SERVMSG, msg);
             
-            if(!timesugg || totalmillis - timesugg >= 5000)  //display suggestions each 5 voting secconds
+            if(!timesugg || totalmillis - timesugg >= 5000)  //display suggestions each 5 voting seconds
             {
                 timesugg = totalmillis ? totalmillis : 1;
                 sendf(-1, 1, "ris", N_SERVMSG, "\f3[votekick] \f2use \f0/kick \f2or \f0#votekick \f2to vote for kicking");
@@ -4654,7 +4650,7 @@ namespace server
     void _info(const char *cmd, const char *args, clientinfo *ci)
     {
         string msg, buf;
-        uint t, months, weeks, days, hours, minutes, secconds;
+        uint t, months, weeks, days, hours, minutes, seconds;
         
         copystring(msg,
             "\f5[INFO] \f7Cube 2: Sauerbraten \f2server modification \f7zeromod \f2(based on original server)\n"
@@ -4721,7 +4717,7 @@ namespace server
         t = t % (60*60);
         minutes = t / 60;
         t = t % 60;
-        secconds = t;
+        seconds = t;
         
         if(months)
         {
@@ -4753,9 +4749,9 @@ namespace server
             concatstring(msg, buf);
         }
         
-        if(secconds)
+        if(seconds)
         {
-            formatstring(buf)(" \f0%u \f2secconds", secconds);
+            formatstring(buf)(" \f0%u \f2seconds", seconds);
             concatstring(msg, buf);
         }
         
@@ -5469,7 +5465,8 @@ namespace server
                         allowedips.shrink(0);
                         if(mm>=MM_PRIVATE)
                         {
-                            loopv(clients) allowedips.add(getclientip(clients[i]->clientnum));
+                            loopv(clients) if(clients[i]->state.aitype==AI_NONE)
+                                allowedips.add(getclientip(clients[i]->clientnum));
                         }
                         sendf(-1, 1, "rii", N_MASTERMODE, mastermode);
                         //sendservmsgf("mastermode is now %s (%d)", mastermodename(mastermode), mastermode);

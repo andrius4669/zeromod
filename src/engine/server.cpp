@@ -7,7 +7,6 @@
 
 static FILE *logfile = NULL;
 volatile bool reloadcfg = false;
-volatile bool modifyhost = false;
 SVAR(configfile, "server-init.cfg");
 
 void closelogfile()
@@ -179,7 +178,8 @@ void cleanupserver()
     pongsock = lansock = ENET_SOCKET_NULL;
 }
 
-VARF(serveruprate, 0, 0, INT_MAX, { if(serverhost) modifyhost = true; });
+VARF(serveruprate, 0, 0, INT_MAX, { if(serverhost) serverhost->outgoingBandwidth = serveruprate; });
+VARF(serverdownrate, 0, 0, INT_MAX, { if(serverhost) serverhost->incomingBandwidth = serverdownrate; });
 SVAR(serverip, ""); //TODO recreate host if serverhost exist
 VARF(serverport, 0, server::serverport(), 0xFFFF, { if(!serverport) serverport = server::serverport(); });
 
@@ -205,7 +205,11 @@ void sendpacket(int n, int chan, ENetPacket *packet, int exclude)
         loopv(clients) if(i!=exclude && server::allowbroadcast(i)) sendpacket(i, chan, packet);
         return;
     }
-    if(!clients.inrange(n)) return;
+    if(!clients.inrange(n))
+    {
+        logoutf("BUG: Incorrect cn in sendpacket: %i", n);
+        return;
+    }
     switch(clients[n]->type)
     {
         case ST_TCPIP:
@@ -1024,7 +1028,7 @@ bool setuplistenserver(void)
         if(enet_address_set_host(&address, serverip)<0) conoutf(CON_WARN, "WARNING: server ip not resolved");
         else serveraddress.host = address.host;
     }
-    serverhost = enet_host_create(&address, min(maxclients + server::reserveclients(), MAXCLIENTS), server::numchannels(), 0, serveruprate);
+    serverhost = enet_host_create(&address, min(maxclients + server::reserveclients(), MAXCLIENTS), server::numchannels(), serverdownrate, serveruprate);
     if(!serverhost) return servererror("could not create server host");
     serverhost->duplicatePeers = maxdupclients ? maxdupclients : MAXCLIENTS;
     loopi(maxclients) serverhost->peers[i].data = NULL;
@@ -1070,6 +1074,7 @@ bool serveroption(char *opt)
     switch(opt[1])
     {
         case 'u': setvar("serveruprate", atoi(opt+2)); return true;
+        case 'd': setvar("serverdownrate", atoi(opt+2)); return true;
         case 'c': setvar("maxclients", atoi(opt+2)); return true;
         case 'i': setsvar("serverip", opt+2); return true;
         case 'j': setvar("serverport", atoi(opt+2)); return true; 
