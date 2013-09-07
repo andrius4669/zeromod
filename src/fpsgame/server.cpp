@@ -748,6 +748,9 @@ namespace server
     FVAR(serverintermission, 1.0, 10.0, 3600.0);    //intermission interval (in seconds)
     VAR(serversuggestnp, 0, 1, 1);                  //decides if server suggest players to say #np
     SVAR(commandchars, "#");                        //defines characters which are interepted as command starting characters
+    VARF(defaultgamemode, 0, 0, NUMGAMEMODES+STARTGAMEMODE, { if(!m_mp(defaultgamemode)) defaultgamemode = 0; });
+    VAR(disabledamage, 0, 0, 1);    //disable damage in coop
+    int _nodamage = 0;
     
     SVAR(serverdesc, "");
     SVAR(serverpass, "");
@@ -927,6 +930,7 @@ namespace server
     void serverinit()
     {
         smapname[0] = '\0';
+        gamemode = defaultgamemode;
         resetitems();
     }
 
@@ -2166,8 +2170,6 @@ namespace server
             ci->state.timeplayed += lastmillis - ci->state.lasttimeplayed;
         }
 
-        //if(!m_mp(gamemode)) kicknonlocalclients(DISC_LOCAL);
-
         sendf(-1, 1, "risii", N_MAPCHANGE, smapname, gamemode, 1);
 
         clearteaminfo();
@@ -2187,7 +2189,7 @@ namespace server
             if(ci->state.state!=CS_SPECTATOR && !ci->_xi.spy) sendspawn(ci);
         }
 
-        if(!clearbots) loopv(bots) if(bots[i] && bots[i]->aireinit<1) bots[i]->aireinit = 1;
+        if(!clearbots) loopv(bots) if(bots[i]->aireinit<1) bots[i]->aireinit = 1;
         aiman::changemap();
 
         if(m_demo)
@@ -2200,6 +2202,8 @@ namespace server
         }
 
         if(smode) smode->setup();
+        
+        _nodamage = disabledamage;
     }
 
     void rotatemap(bool next)
@@ -2380,7 +2384,7 @@ namespace server
                 best.setsize(0);
                 best.add(clients[0]);
                 besti = best[0]->state.damage*100/max(best[0]->state.shotdamage, 1);
-                for(int i = 1; i < clients.length(); i++)
+                loopv(clients)
                 {
                     if((clients[i]->state.damage*100/max(clients[i]->state.shotdamage, 1) > besti))
                     {
@@ -2395,7 +2399,7 @@ namespace server
                 }
                 
                 int l = min(best.length(), 2);
-                for(int i = 0; i < l; i++)
+                loopi(l)
                 {
                     concatstring(msg, colorname(best[i]), MAXTRANS);
                     if(i + 1 < l) concatstring(msg, ", ", MAXTRANS);
@@ -2413,7 +2417,7 @@ namespace server
     void dodamage(clientinfo *target, clientinfo *actor, int damage, int gun, const vec &hitpush = vec(0, 0, 0))
     {
         gamestate &ts = target->state;
-        ts.dodamage(damage);
+        if(!_nodamage || !m_edit) ts.dodamage(damage);
         if(target!=actor && !isteam(target->team, actor->team)) actor->state.damage += damage;
         sendf(-1, 1, "ri6", N_DAMAGE, target->clientnum, actor->clientnum, damage, ts.armour, ts.health);
         if(target==actor) target->setpushed();
@@ -2827,7 +2831,6 @@ namespace server
         ci->sessionid = (rnd(0x1000000)*((totalmillis%10000)+1))&0xFFFFFF;
 
         connects.add(ci);
-        //if(!m_mp(gamemode)) return DISC_LOCAL;
         sendservinfo(ci);
         return DISC_NONE;
     }
@@ -4758,6 +4761,26 @@ namespace server
         sendf(ci ? ci->clientnum : -1, 1, "ris", N_SERVMSG, msg);
     }
     
+    void _nodamagefunc(const char *cmd, const char *args, clientinfo *ci)
+    {
+        bool onlyask;
+        if(!m_edit)
+        {
+            if(ci) sendf(ci->clientnum, 1, "ris", N_SERVMSG, "nodamage is only avaiable in coop edit mode (1)");
+            else logoutf("nodamage is only avaiable in coop edit mode (1)");
+            return;
+        }
+        
+        if(args && args[0]) onlyask = false;
+        else onlyask = true;
+        
+        if(!onlyask) _nodamage = atoi(args) ? 1 : 0;
+        
+        defformatstring(msg)("nodamage %sabled", _nodamage ? "\f0en" : "\f4dis");
+        if(!onlyask || ci) sendf((!onlyask || !ci) ? -1 : ci->clientnum, 1, "ris", N_SERVMSG, msg);
+        else logoutf(msg);
+    }
+    
 //  >>> Server internals
     
     static void _addfunc(const char *s, int priv, void (*_func)(const char *cmd, const char *args, clientinfo *ci))
@@ -4796,6 +4819,7 @@ namespace server
         _addfunc("sendto", PRIV_MASTER, _sendto);
         _addfunc("rename name", PRIV_AUTH, _renamefunc);
         _addfunc("listgbans showgbans", PRIV_AUTH, _showgbans);
+        _addfunc("nodamage", PRIV_MASTER, _nodamagefunc);
     }
     
     void _privfail(clientinfo *ci)
@@ -5631,6 +5655,7 @@ namespace server
                     resetitems();
                     notgotitems = false;
                     if(smode) smode->newmap();
+                    _nodamage = disabledamage;
 					loopv(clients)
 					{
 						clientinfo &cx = *clients[i];
