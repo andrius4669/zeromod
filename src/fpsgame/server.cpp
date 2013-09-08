@@ -26,6 +26,8 @@ namespace server
     _hookparam _hp;
     
     int _exechook(const char *name);
+    void _initfuncs();
+    void _initman();
     
     struct server_entity            // server side version of "entity" type
     {
@@ -749,8 +751,10 @@ namespace server
     VAR(serversuggestnp, 0, 1, 1);                  //decides if server suggest players to say #np
     SVAR(commandchars, "#");                        //defines characters which are interepted as command starting characters
     VARF(defaultgamemode, 0, 0, NUMGAMEMODES+STARTGAMEMODE, { if(!m_mp(defaultgamemode)) defaultgamemode = 0; });
-    VAR(disabledamage, 0, 0, 1);    //disable damage in coop
+    VAR(disabledamage, -1, 0, 1);                   //disable damage in coop, -1 = not allowed
     int _nodamage = 0;
+    VAR(defaultmastermode, MM_AUTH, MM_OPEN, MM_PASSWORD);
+    VAR(serverhidepriv, PRIV_NONE, PRIV_NONE, PRIV_ROOT);
     
     SVAR(serverdesc, "");
     SVAR(serverpass, "");
@@ -931,7 +935,10 @@ namespace server
     {
         smapname[0] = '\0';
         gamemode = defaultgamemode;
+        mastermode = defaultmastermode;
         resetitems();
+        _initfuncs();
+        _initman();
     }
 
     int numclients(int exclude = -1, bool nospec = true, bool noai = true, bool priv = false)
@@ -1525,7 +1532,7 @@ namespace server
     {
         putint(p, N_CURRENTMASTER);
         putint(p, mastermode);
-        loopv(clients) if(clients[i]->privilege >= PRIV_MASTER && !clients[i]->_xi.spy)
+        loopv(clients) if(clients[i]->privilege >= PRIV_MASTER && !clients[i]->_xi.spy && !(serverhidepriv && clients[i]->privilege >= serverhidepriv))
         {
             putint(p, clients[i]->clientnum);
             putint(p, clamp(clients[i]->privilege, int(PRIV_NONE), int(PRIV_ADMIN)));
@@ -1537,6 +1544,8 @@ namespace server
     {
         if(authname && !val) return false;
         const char *name = "";
+        int oldpriv = (!serverhidepriv || ci->privilege < serverhidepriv) ? ci->privilege : PRIV_NONE;
+
         if(val)
         {
             bool hasadminpass = adminpass[0] && checkpassword(ci, adminpass, pass);
@@ -1581,22 +1590,45 @@ namespace server
         loopv(clients) if(clients[i]->privilege >= PRIV_MASTER) hasmaster = true;
         if(!hasmaster)
         {
-            mastermode = MM_OPEN;
-            allowedips.shrink(0);
+            mastermode = defaultmastermode;
+            if(mastermode < MM_PRIVATE) allowedips.shrink(0);
         }
+        
+        bool ishidden = ci->_xi.spy || (serverhidepriv && ci->privilege >= serverhidepriv);
+        
         string msg;
         if(val && authname)
         {
-            if(authdesc && authdesc[0]) formatstring(msg)("%s claimed %s as '\fs\f5%s\fr' [\fs\f0%s\fr]", colorname(ci), name, authname, authdesc);
-            else formatstring(msg)("%s claimed %s as '\fs\f5%s\fr'", colorname(ci), name, authname);
+            if(authdesc && authdesc[0]) formatstring(msg)("%s claimed %s as '\fs\f5%s\fr' [\fs\f0%s\fr]%s",
+                colorname(ci), name, authname, authdesc, !ishidden ? "" : " \f1(hidden)");
+            else formatstring(msg)("%s claimed %s as '\fs\f5%s\fr'%s", colorname(ci), name, authname, !ishidden ? "" : " \f1(hidden)");
         } 
-        else formatstring(msg)("%s %s %s", colorname(ci), val ? "claimed" : "relinquished", name);
+        else formatstring(msg)("%s %s %s%s", colorname(ci), val ? "claimed" : "relinquished", name, !ishidden ? "" : " \f1(hidden)");
         logoutf(msg);
-        packetbuf p(MAXTRANS, ENET_PACKET_FLAG_RELIABLE);
-        putint(p, N_SERVMSG);
-        sendstring(msg, p);
-        _putmaster(p);
-        sendpacket((!ci->_xi.spy) ? -1 : ci->ownernum, 1, p.finalize());
+        
+        if((!ishidden || oldpriv) && !ci->_xi.spy)
+        {
+            packetbuf p(MAXTRANS, ENET_PACKET_FLAG_RELIABLE);
+            putint(p, N_SERVMSG);
+            if(!ishidden) sendstring(msg, p);
+            else
+            {
+                defformatstring(tmp)("%s relinquished %s", colorname(ci), name);
+                sendstring(tmp, p);
+            }
+            _putmaster(p);
+            sendpacket(-1, 1, p.finalize(), !ishidden ? -1 : ci->ownernum);
+        }
+        
+        if(ishidden)
+        {
+            packetbuf q(MAXTRANS, ENET_PACKET_FLAG_RELIABLE);
+            putint(q, N_SERVMSG);
+            sendstring(msg, q);
+            _putmaster(q);
+            sendpacket(ci->ownernum, 1, q.finalize());
+        }
+        
         checkpausegame();
         return true;
     }
@@ -2010,7 +2042,7 @@ namespace server
             putint(p, mastermode);
             hasmaster = true;
         }
-        loopv(clients) if(clients[i]->privilege >= PRIV_MASTER && !clients[i]->_xi.spy)
+        loopv(clients) if(clients[i]->privilege >= PRIV_MASTER && !clients[i]->_xi.spy && (!serverhidepriv || clients[i]->privilege < serverhidepriv))
         {
             if(!hasmaster)
             {
@@ -2203,7 +2235,7 @@ namespace server
 
         if(smode) smode->setup();
         
-        _nodamage = disabledamage;
+        _nodamage = disabledamage >= 0 ? disabledamage : 0;
     }
 
     void rotatemap(bool next)
@@ -2494,7 +2526,6 @@ namespace server
                 break;
 
             default:
-                _cheater(ci, "gunhack::explosion::invalid_gun", AC_GUNHACK, 100);
                 return;
         }
         sendf(-1, 1, "ri4x", N_EXPLODEFX, ci->clientnum, gun, id, ci->ownernum);
@@ -2538,7 +2569,7 @@ namespace server
         }
         if(gs.ammo[gun] <= 0)
         {
-            if(!m_edit) _cheater(ci, "gunhack::noammo", AC_GUNHACK, 0);
+            if(!m_edit) _cheater(ci, "gunhack::noammo", AC_GUNHACK, 10);
             return;
         }
         if(!gs.isalive(gamemillis) || wait < gs.gunwait) return; //tolerate this
@@ -2851,6 +2882,7 @@ namespace server
             if(smode) smode->leavegame(ci, true);
             ci->state.timeplayed += lastmillis - ci->state.lasttimeplayed;
             savescore(ci);
+            logoutf("leave: %s", colorname(ci));
             sendf(-1, 1, "ri2", N_CDIS, n);
             aiman::removeai(ci);
             clients.removeobj(ci);
@@ -3147,6 +3179,7 @@ namespace server
 
         sendwelcome(ci);
         if(restorescore(ci)) sendresume(ci);
+        logoutf("join: %s", colorname(ci));
         sendinitclient(ci);
 
         aiman::addclient(ci);
@@ -3187,15 +3220,25 @@ namespace server
     {
         string name;    //function name
         int priv;       //privilege required to call function
+        void (*func)(const char *cmd, const char *args, clientinfo *ci);    //function pointer
+        bool hidden, disabled;  //some flags
         
-        _funcdeclaration(const char *_name, int _priv, void (*_func)(const char *cmd, const char *args, clientinfo *ci))
+        _funcdeclaration()
         {
-            copystring(name, _name);
-            priv = _priv;
-            func = _func;
+            name[0] = 0;
+            priv = 0;
+            func = 0;
+            hidden = disabled = false;
         }
         
-        void (*func)(const char *cmd, const char *args, clientinfo *ci);
+        _funcdeclaration(const char *name, int priv, void (*func)(const char *cmd, const char *args, clientinfo *ci), bool hidden = false, bool disabled = false)
+        {
+            copystring(_funcdeclaration::name, name);
+            _funcdeclaration::priv = priv;
+            _funcdeclaration::func = func;
+            _funcdeclaration::hidden = hidden;
+            _funcdeclaration::disabled = disabled;
+        }
     };
     vector<_funcdeclaration *> _funcs;
 
@@ -3314,8 +3357,6 @@ namespace server
         _addmanpage("help man", "[command]", "Shows help about command or prints avaiable commands");
         _addmanpage("info version", "", "Shows information about server");
         _addmanpage("wall announce", "<message>", "Prints message on the wall");
-        _addmanpage("set", "<varname> <value>", "Sets variable <varname> to <value>");
-        _addmanpage("showvars", "", "Shows internal server variables");
         _addmanpage("mute", "[cn]", "Mutes one or all players");
         _addmanpage("unmute", "[cn]", "Unmutes one or all players");
         _addmanpage("priv setpriv givepriv", "[cn] <priv>", "Gives privilege for user (privilege can be number or string, like master)");
@@ -3337,10 +3378,10 @@ namespace server
         _addmanpage("interm intermission", "", "Starts intermission");
         _addmanpage("ban", "cn [time]", "Bans client; time is in format: [num][ ][s/m/h/d]; by default, time is 4h; example: #ban 0 1d");
         _addmanpage("votekick", "cn", "Votes client kick");
-		_addmanpage("interm intermission", "", "Starts intermission");
+        _addmanpage("interm intermission", "", "Starts intermission");
         _addmanpage("rename name", "<cn> [name]", "Renames player");
         _addmanpage("listgbans showgbans", "", "Shows gbas list");
-        _addmanpage("vars", "", "Prints all variables and security descriptors");
+        _addmanpage("nodamage", "[1/0]", "Disables damage in coop edit mode");
     }
     
     void _man(const char *cmd, const char *args, clientinfo *ci)
@@ -3384,9 +3425,7 @@ namespace server
         }
         
         if(cmd && *cmd && !strcmp(cmd, "usage")) usage = true;
-        
-        if(!_manpages.length()) _initman();
-        
+                
     _search:
         found = false;
         loopv(_manpages) if(_manpages[i])
@@ -3643,9 +3682,24 @@ namespace server
                 ci->state.timeplayed += lastmillis - ci->state.lasttimeplayed;
             }
             aiman::removeai(ci);
-            sendf(ci->clientnum, 1, "ri3", N_SPECTATOR, ci->clientnum, 1);
+            if(ci->privilege && (!serverhidepriv || ci->privilege < serverhidepriv))
+            {
+                //send out privileges
+                packetbuf p(MAXTRANS, ENET_PACKET_FLAG_RELIABLE);
+                defformatstring(tmp)("%s relinquished %s", colorname(ci), privname(ci->privilege));
+                putint(p, N_SERVMSG);
+                sendstring(tmp, p);
+                _putmaster(p);
+                sendpacket(-1, 1, p.finalize(), ci->clientnum);
+                //send out same privileges but without message to spyer
+                packetbuf q(MAXTRANS, ENET_PACKET_FLAG_RELIABLE);
+                _putmaster(q);
+                sendpacket(ci->clientnum, 1, q.finalize());
+            }
+            
             sendf(-1, 1, "rxi2", ci->clientnum, N_CDIS, ci->clientnum);
-            sendf(ci->clientnum, 1, "ris", N_SERVMSG, "\f1[SPY] \f0You entered spy mode");
+            
+            sendf(ci->clientnum, 1, "ri3is", N_SPECTATOR, ci->clientnum, 1, N_SERVMSG, "\f1[SPY] \f0You entered spy mode");
         }
         else
         {
@@ -3661,7 +3715,7 @@ namespace server
             //sendf(-1, 1, "rxi2ssi", ci->clientnum, N_INITCLIENT, ci->clientnum, ci->name, ci->team, ci->playermodel);
             sendinitclient(ci);
             sendresume(ci);
-            sendf(-1, 1, "ri3", N_SPECTATOR, ci->clientnum, ci->state.state==CS_SPECTATOR?1:0);
+            sendf(-1, 1, "ri3", N_SPECTATOR, ci->clientnum, ci->state.state==CS_SPECTATOR ? 1 : 0);
             
             //send out privileges
             packetbuf p(MAXTRANS, ENET_PACKET_FLAG_RELIABLE);
@@ -3844,7 +3898,7 @@ namespace server
         else if(!strcmp(s, "notifypriv")) return (void *)_notifypriv;
         else
         {
-            for(int i = 0; i < _plfuncs.length(); i++)
+            loopv(_plfuncs)
             {
                 if(_plfuncs[i] && !strcmp(s, _plfuncs[i]->name) && _plfuncs[i]->ptr) return _plfuncs[i]->ptr;
             }
@@ -4200,14 +4254,44 @@ namespace server
             (cx->privilege!=privilege) &&
             (_getpriv(ci)>=privilege)))
         {
-            defformatstring(msg)("%s %s %s", colorname(cx), privilege?"claimed":"relinquished", privname(privilege?privilege:cx->privilege));
+            bool ishidden = cx->_xi.spy || (serverhidepriv && privilege >= serverhidepriv);
+            
+            defformatstring(msg)("%s %s %s%s", colorname(cx), privilege?"claimed":"relinquished",
+                                 privname(privilege?privilege:cx->privilege), !ishidden ? "" : " \f1(hidden)");
+            int oldpriv = (!serverhidepriv || cx->privilege < serverhidepriv) ? cx->privilege : PRIV_NONE;
             cx->privilege = privilege;
-
-            packetbuf p(MAXTRANS, ENET_PACKET_FLAG_RELIABLE);
-            putint(p, N_SERVMSG);
-            sendstring(msg, p);
-            _putmaster(p);
-            sendpacket((!cx->_xi.spy) ? -1 : cx->clientnum, 1, p.finalize());
+            
+            if((!ishidden || oldpriv) && !cx->_xi.spy)
+            {
+                packetbuf p(MAXTRANS, ENET_PACKET_FLAG_RELIABLE);
+                putint(p, N_SERVMSG);
+                if(!ishidden) sendstring(msg, p);
+                else
+                {
+                    defformatstring(tmp)("%s relinquished %s", colorname(cx), privname(oldpriv));
+                    sendstring(tmp, p);
+                }
+                _putmaster(p);
+                ENetPacket *_p = p.finalize();
+                if(!ishidden) sendpacket(-1, 1, _p);
+                else
+                {
+                    loopv(clients) if(clients[i]->state.aitype == AI_NONE && clients[i] != ci && clients[i] != cx)
+                        sendpacket(clients[i]->ownernum, 1, _p);
+                }
+            }
+            
+            if(ishidden)
+            {
+                packetbuf q(MAXTRANS, ENET_PACKET_FLAG_RELIABLE);
+                putint(q, N_SERVMSG);
+                sendstring(msg, q);
+                _putmaster(q);
+                ENetPacket *_q = q.finalize();
+                sendpacket(cx->ownernum, 1, _q);
+                if(ci && ci != cx) sendpacket(ci->ownernum, 1, _q);
+            }
+            
             checkpausegame();
         }
         else _privfail(ci);
@@ -4774,7 +4858,16 @@ namespace server
         if(args && args[0]) onlyask = false;
         else onlyask = true;
         
-        if(!onlyask) _nodamage = atoi(args) ? 1 : 0;
+        if(!onlyask)
+        {
+            if(disabledamage < 0)
+            {
+                if(ci) sendf(ci->clientnum, 1, "ris", N_SERVMSG, "nodamage is disabled in server configuration");
+                else logoutf("nodamage is disabled in server configuration");
+                return;
+            }
+            _nodamage = atoi(args) ? 1 : 0;
+        }
         
         defformatstring(msg)("nodamage %sabled", _nodamage ? "\f0en" : "\f4dis");
         if(!onlyask || ci) sendf((!onlyask || !ci) ? -1 : ci->clientnum, 1, "ris", N_SERVMSG, msg);
@@ -4790,7 +4883,17 @@ namespace server
         char *argv[260];
         copystring(buf, s, MAXTRANS);
         argc = _argsep(buf, 260, argv);
-        for(int i = 0; i < argc; i++) if(argv[i]) _funcs.add(new _funcdeclaration(argv[i], priv, _func));
+        loopi(argc) if(argv[i]) _funcs.add(new _funcdeclaration(argv[i], priv, _func));
+    }
+    
+    static void _addhiddenfunc(const char *s, int priv, void (*_func)(const char *cmd, const char *args, clientinfo *ci))
+    {
+        char buf[MAXTRANS];
+        int argc;
+        char *argv[260];
+        copystring(buf, s, MAXTRANS);
+        argc = _argsep(buf, 260, argv);
+        loopi(argc) if(argv[i]) _funcs.add(new _funcdeclaration(argv[i], priv, _func, true));
     }
     
     void _initfuncs()
@@ -4802,8 +4905,6 @@ namespace server
         _addfunc("pm", 0, _pm);
         _addfunc("exec", PRIV_ROOT, _exec);
         _addfunc("stats", 0, _stats);
-        //_addfunc("set", 0, _set);
-        //_addfunc("vars", PRIV_ADMIN, _showvars);
         _addfunc("load reload unload", PRIV_ROOT, _load);
         _addfunc("getip", PRIV_ADMIN, _getip);
         _addfunc("priv setpriv setmaster givemaster", PRIV_MASTER, _setpriv);
@@ -4812,12 +4913,14 @@ namespace server
         _addfunc("mute unmute", PRIV_AUTH, _mutefunc);
         _addfunc("editmute editunmute", PRIV_MASTER, _editmutefunc);
         _addfunc("spy", PRIV_ADMIN, _spyfunc);
-        _addfunc("np forgive fg", 0, _np);
+        _addfunc("np", PRIV_NONE, _np);
+        _addhiddenfunc("forgive fg", PRIV_NONE, _np);
         _addfunc("interm intermission", PRIV_ADMIN, _interm);
         _addfunc("ban", PRIV_ADMIN, _ban);
-        _addfunc("votekick", 0, _votekickfunc);
+        _addfunc("votekick", PRIV_NONE, _votekickfunc);
         _addfunc("sendto", PRIV_MASTER, _sendto);
-        _addfunc("rename name", PRIV_AUTH, _renamefunc);
+        _addfunc("rename", PRIV_AUTH, _renamefunc);
+        _addhiddenfunc("name", PRIV_AUTH, _renamefunc);
         _addfunc("listgbans showgbans", PRIV_AUTH, _showgbans);
         _addfunc("nodamage", PRIV_MASTER, _nodamagefunc);
     }
@@ -4850,9 +4953,7 @@ namespace server
         char *argv[2];
         string str;
         bool executed=false;
-        
-        if(_funcs.empty()) _initfuncs();
-        
+
         if(!cmd || !cmd[0]) return;
         copystring(str, cmd);
         _argsep(str, 2, argv);
@@ -5193,7 +5294,7 @@ namespace server
                 if(cq) 
                 {
                     cq->addevent(shot);
-                    if(shot->gun != GUN_FIST) cq->setpushed();  //DANGER may be used to hide cheat
+                    if(shot->gun > GUN_FIST && shot->gun <= GUN_PISTOL && cq->state.ammo[shot->gun]) cq->setpushed();  //DANGER may be used to hide cheat
                 }
                 else delete shot;
                 break;
@@ -5358,7 +5459,8 @@ namespace server
 
             case N_ITEMLIST:
             {
-                if((ci->state.state==CS_SPECTATOR && !ci->privilege) || !notgotitems || strcmp(ci->clientmap, smapname)) { while(getint(p)>=0 && !p.overread()) getint(p); break; }
+                if(!notgotitems || (ci->state.state==CS_SPECTATOR && !ci->privilege) ||
+                     strcmp(ci->clientmap, smapname)) { while(getint(p)>=0 && !p.overread()) getint(p); break; }
                 int n;
                 while((n = getint(p))>=0 && n<MAXENTS && !p.overread())
                 {
@@ -5529,11 +5631,11 @@ namespace server
                 int spectator = getint(p), val = getint(p);
                 if(!ci->privilege && (spectator!=sender || (ci->state.state==CS_SPECTATOR && (mastermode>=MM_LOCKED || ci->_xi.forcedspectator)))) break;
                 if(ci->_xi.spy && spectator == ci->clientnum)	//unspy spyer
-				{
-					ci->state.state = (!val) ? CS_DEAD : CS_SPECTATOR;
-					_spy(ci, false);
-					break;
-				}
+                {
+                    ci->state.state = (!val) ? CS_DEAD : CS_SPECTATOR;
+                    _spy(ci, false);
+                    break;
+                }
                 clientinfo *spinfo = (clientinfo *)getclientinfo(spectator); // no bots
                 if(!spinfo || (spinfo->state.state==CS_SPECTATOR ? val : !val)) break;
 
@@ -5575,11 +5677,11 @@ namespace server
                 sendf(-1, 1, "riisi", N_SETTEAM, who, wi->team, 1);
                 break;
             }
-/*
+#if 0
             case N_FORCEINTERMISSION:
                 if(ci->local && !hasnonlocalclients()) startintermission();
                 break;
-*/
+#endif
             case N_RECORDDEMO:
             {
                 int val = getint(p);
@@ -5655,7 +5757,7 @@ namespace server
                     resetitems();
                     notgotitems = false;
                     if(smode) smode->newmap();
-                    _nodamage = disabledamage;
+                    _nodamage = disabledamage >= 0 ? disabledamage : 0;
 					loopv(clients)
 					{
 						clientinfo &cx = *clients[i];

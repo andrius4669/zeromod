@@ -686,8 +686,8 @@ void serverslice(bool dedicated, uint timeout)   // main server update, called f
             {
                 client *c = (client *)event.peer->data;
                 if(!c) break;
-                logoutf("disconnected client (%s)", c->hostname);
                 server::clientdisconnect(c->num);
+                logoutf("disconnected client (%s)", c->hostname);
                 delclient(c);
                 break;
             }
