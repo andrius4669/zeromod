@@ -165,7 +165,7 @@ void filtertext(char *dst, const char *src, bool whitespace, int len)
             if(!*++src) break;
             continue;
         }
-        if(iscubeprint(c) || (iscubespace(c) && whitespace))
+        if(iscubeprint(c) || (whitespace && iscubespace(c)))
         {
             *dst++ = c;
             if(!--len) break;

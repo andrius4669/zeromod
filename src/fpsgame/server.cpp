@@ -751,7 +751,7 @@ namespace server
     VAR(serversuggestnp, 0, 1, 1);                  //decides if server suggest players to say #np
     SVAR(commandchars, "#");                        //defines characters which are interepted as command starting characters
     VARF(defaultgamemode, 0, 0, NUMGAMEMODES+STARTGAMEMODE, { if(!m_mp(defaultgamemode)) defaultgamemode = 0; });
-    VAR(disabledamage, -1, 0, 1);                   //disable damage in coop, -1 = not allowed
+    VAR(disabledamage, -1, -1, 1);                   //disable damage in coop, -1 = not allowed
     int _nodamage = 0;
     VAR(defaultmastermode, MM_AUTH, MM_OPEN, MM_PASSWORD);
     VAR(serverhidepriv, PRIV_NONE, PRIV_NONE, PRIV_ROOT);
@@ -891,7 +891,6 @@ namespace server
 
     const char *privname(int type)
     {
-        static char buf[32];    //static buffer for unknown[i]
         switch(type)
         {
             case PRIV_ADMIN: return "\fs\f6admin\fr";
@@ -899,9 +898,7 @@ namespace server
             case PRIV_MASTER: return "\fs\f0master\fr";
             case PRIV_ROOT: return "\fs\f3root\fr";
             case PRIV_NONE: return "none";
-            default:
-                formatstring(buf)("\fs\f4unknown\f1[\f5%i\f1]\fr", type);
-                return (const char *)buf;
+            default: return "\fs\f4unknown\fr";
         }
     }
 
@@ -2868,7 +2865,7 @@ namespace server
 
     void clientdisconnect(int n)
     {
-        clientinfo *ci = getinfo(n);
+        clientinfo *ci = (clientinfo *)getclientinfo(n);
         if(!ci) return;
         loopv(clients)
         {
@@ -2898,9 +2895,8 @@ namespace server
     {
         enet_uint32 ip, mask;
     };
-
     vector<gbaninfo> gbans;
-
+    
     void cleargbans()
     {
         gbans.shrink(0);
@@ -2954,7 +2950,55 @@ namespace server
             if(checkgban(getclientip(ci->clientnum))) disconnect_client(ci->clientnum, DISC_IPBAN);
         }
     }
-       
+    
+    struct pbaninfo
+    {
+        enet_uint32 ip, mask;
+        time_t expire;
+        char reason[80];
+    };
+    vector<pbaninfo> pbans;
+    
+    void clearpbans()
+    {
+        pbans.shrink(0);
+    }
+    
+    bool checkpban(uint ip)
+    {
+        time_t currtime;
+        time(&currtime);
+        while(pbans.length() && pbans[0].expire <= currtime) pbans.remove(0);
+        loopvrev(pbans) if((ip & pbans[i].mask) == pbans[i].ip) return true;
+        return false;
+    }
+    
+    void addpban(const char *name, time_t expire, const char *reason)
+    {
+        pbaninfo b;
+        union { uchar b[sizeof(enet_uint32)]; enet_uint32 i; } ip, mask;
+        ip.i = 0;
+        mask.i = 0;
+        loopi(4)
+        {
+            char *end = NULL;
+            int n = strtol(name, &end, 10);
+            if(!end) break;
+            if(end > name) { ip.b[i] = n; mask.b[i] = 0xFF; }
+            name = end;
+            while(*name && *name++ != '.');
+        }
+        b.ip = ip.i;
+        b.mask = mask.i;
+        b.expire = expire;
+        filtertext(b.reason, reason, true, 80);
+        time_t currtime;
+        time(&currtime);
+        while(pbans.length() && pbans[0].expire <= currtime) pbans.remove(0);
+        loopv(pbans) if(expire < pbans[i].expire) { pbans.insert(i, b); return; }
+        pbans.add(b);
+    }
+    
     int allowconnect(clientinfo *ci, const char *pwd = "")
     {
         if(serverpass[0])
@@ -2964,11 +3008,12 @@ namespace server
         }
         if(adminpass[0] && checkpassword(ci, adminpass, pwd)) return DISC_NONE;
         if(authpass[0] && checkpassword(ci, authpass, pwd)) return DISC_NONE;
-        if(masterpass[0] && checkpassword(ci, masterpass, pwd)) return DISC_NONE;
         if(numclients(-1, false, true)>=maxclients) return DISC_MAXCLIENTS;
+        if(masterpass[0] && checkpassword(ci, masterpass, pwd)) return DISC_NONE;
         uint ip = getclientip(ci->clientnum);
-        loopv(bannedips) if(bannedips[i].ip==ip) return DISC_IPBAN;
+        loopvrev(bannedips) if(bannedips[i].ip==ip) return DISC_IPBAN;
         if(checkgban(ip)) return DISC_IPBAN;
+        if(checkpban(ip)) return DISC_IPBAN;
         if(mastermode>=MM_PRIVATE && allowedips.find(ip)<0) return DISC_PRIVATE;
         return DISC_NONE;
     }

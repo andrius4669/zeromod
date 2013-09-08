@@ -7,6 +7,7 @@
 
 static FILE *logfile = NULL;
 volatile bool reloadcfg = false;
+volatile bool quitserver = false;
 SVAR(configfile, "server-init.cfg");
 
 void closelogfile()
@@ -178,10 +179,17 @@ void cleanupserver()
     pongsock = lansock = ENET_SOCKET_NULL;
 }
 
-VARF(serveruprate, 0, 0, INT_MAX, { if(serverhost) serverhost->outgoingBandwidth = serveruprate; });
-VARF(serverdownrate, 0, 0, INT_MAX, { if(serverhost) serverhost->incomingBandwidth = serverdownrate; });
+void _updaterates();
+
+VARF(serveruprate, 0, 0, INT_MAX, _updaterates());
+VARF(serverdownrate, 0, 0, INT_MAX, _updaterates());
 SVAR(serverip, ""); //TODO recreate host if serverhost exist
 VARF(serverport, 0, server::serverport(), 0xFFFF, { if(!serverport) serverport = server::serverport(); });
+
+void _updaterates()
+{
+    if(serverhost) enet_host_bandwidth_limit(serverhost, serverdownrate, serveruprate);
+}
 
 VARF(maxclients, 0, DEFAULTCLIENTS, MAXCLIENTS, {
     if(!maxclients) maxclients = DEFAULTCLIENTS;
@@ -981,6 +989,11 @@ void reloadsignal(int signum)
     reloadcfg = true;
 }
 
+void termsignal(int signum)
+{
+    quitserver = true;
+}
+
 #endif
 
 bool isdedicatedserver() { return true; }
@@ -991,27 +1004,43 @@ void rundedicatedserver()
 #ifdef WIN32
     SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS);
 #else
-	signal(SIGUSR1, reloadsignal);
+    signal(SIGUSR1, reloadsignal);
+    signal(SIGTERM, termsignal);
+    signal(SIGINT, termsignal);
 #endif
-	for(;;)
-	{
+    for(;;)
+    {
 #ifdef WIN32
-		MSG msg;
-		while(PeekMessage(&msg, NULL, 0, 0, PM_REMOVE))
-		{
-			if(msg.message == WM_QUIT) exit(EXIT_SUCCESS);
-			TranslateMessage(&msg);
-			DispatchMessage(&msg);
-		}
+        MSG msg;
+        while(PeekMessage(&msg, NULL, 0, 0, PM_REMOVE))
+        {
+            if(msg.message == WM_QUIT) { quitserver = true; break; }
+            TranslateMessage(&msg);
+            DispatchMessage(&msg);
+        }
 #endif
-		serverslice(true, 5);
-		if(reloadcfg)
-		{
-			logoutf("reloading server configuration");
-			execfile(configfile, false);
-			reloadcfg = false;
-		}
-	}
+        if(quitserver) break;
+        serverslice(true, 5);
+        if(reloadcfg)
+        {
+            logoutf("reloading server configuration");
+            execfile(configfile, false);
+            reloadcfg = false;
+        }
+    }
+    
+    //quit server
+    logoutf("\nserver is shutting down...");
+    //notify clients we stopped working
+    loopv(clients) if(clients[i]->type == ST_TCPIP)
+    {
+        enet_peer_disconnect_now(clients[i]->peer, DISC_NONE);
+        delclient(clients[i]);
+    }
+    //cleanup
+    cleanupserver();
+    closelogfile();
+    return;
 }
 
 bool servererror(const char *desc)
@@ -1066,7 +1095,7 @@ void initserver(void)
     server::serverinit();
 
     updatemasterserver();
-    rundedicatedserver(); // never returns
+    rundedicatedserver();
 }
 
 bool serveroption(char *opt)

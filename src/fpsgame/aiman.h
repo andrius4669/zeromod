@@ -136,6 +136,7 @@ namespace aiman
         clientinfo *owner = (clientinfo *)getclientinfo(ci->ownernum);
         if(owner) owner->bots.removeobj(ci);
         clients.removeobj(ci);
+        loopv(clients) if(clients[i]->_xi.tkiller == ci) clients[i]->_xi.tkiller = 0;
         DELETEP(bots[cn]);
 		dorefresh = true;
 	}
