@@ -955,7 +955,7 @@ namespace server
     bool duplicatename(clientinfo *ci, char *name)
     {
         if(!name) name = ci->name;
-        loopv(clients) if(clients[i]!=ci && !strcmp(name, clients[i]->name)) return true;
+        loopv(clients) if(clients[i]!=ci && !clients[i]->_xi.spy && !strcmp(name, clients[i]->name)) return true;
         return false;
     }
 
@@ -1543,8 +1543,9 @@ namespace server
     {
         if(authname && !val) return false;
         const char *name = "";
-        int oldpriv = (!serverhidepriv || ci->privilege < serverhidepriv) ? ci->privilege : PRIV_NONE;
-        //int oldpriv = ci->privilege;
+        //int oldpriv = (!serverhidepriv || ci->privilege < serverhidepriv) ? ci->privilege : PRIV_NONE;
+        int oldpriv = ci->privilege;
+        bool washidden = (serverhidepriv && ci->privilege >= serverhidepriv) || ci->_xi.spy;
         if(val)
         {
             bool hasadminpass = adminpass[0] && checkpassword(ci, adminpass, pass);
@@ -1586,7 +1587,7 @@ namespace server
             revokemaster(ci);
         }
         bool hasmaster = false;
-        loopv(clients) if(clients[i]->privilege >= PRIV_MASTER) hasmaster = true;
+        loopv(clients) if(clients[i]->privilege >= PRIV_MASTER) { hasmaster = true; break; }
         if(!hasmaster)
         {
             mastermode = defaultmastermode;
@@ -1599,28 +1600,39 @@ namespace server
         if(val && authname)
         {
             if(authdesc && authdesc[0]) formatstring(msg)("%s claimed %s as '\fs\f5%s\fr' [\fs\f0%s\fr]%s",
-                colorname(ci), name, authname, authdesc, !ishidden ? "" : " \f1(hidden)");
-            else formatstring(msg)("%s claimed %s as '\fs\f5%s\fr'%s", colorname(ci), name, authname, !ishidden ? "" : " \f1(hidden)");
+                colorname(ci), name, authname, authdesc, !(ishidden || (oldpriv && washidden)) ? "" : " \f1(hidden)");
+            else formatstring(msg)("%s claimed %s as '\fs\f5%s\fr'%s",
+                colorname(ci), name, authname, !(ishidden || (oldpriv && washidden)) ? "" : " \f1(hidden)");
         } 
-        else formatstring(msg)("%s %s %s%s", colorname(ci), val ? "claimed" : "relinquished", name, !ishidden ? "" : " \f1(hidden)");
+        else formatstring(msg)("%s %s %s%s", colorname(ci), val ? "claimed" : "relinquished", name,
+            !(ishidden || (oldpriv && washidden)) ? "" : " \f1(hidden)");
         logoutf("%s", msg);
         
         //if((!ishidden || (ishidden && oldpriv)) && (!serverhidepriv || oldpriv < serverhidepriv) && !ci->_xi.spy)
-        if((!ishidden || oldpriv) && !ci->_xi.spy)
+        //if((!ishidden || oldpriv) && !ci->_xi.spy)
+        if((ci->privilege && !ishidden && ((oldpriv && washidden) || (!oldpriv && !washidden))) || (oldpriv && !washidden))
         {
             packetbuf p(MAXTRANS, ENET_PACKET_FLAG_RELIABLE);
             putint(p, N_SERVMSG);
-            if(!ishidden) sendstring(msg, p);
-            else
+
+            if(washidden)
             {
-                defformatstring(tmp)("%s relinquished %s", colorname(ci), name);
+                string tmp;
+                formatstring(tmp)("%s %s %s", colorname(ci), "claimed", privname(ci->privilege));
                 sendstring(tmp, p);
             }
+            else if(ishidden)
+            {
+                defformatstring(tmp)("%s %s %s", colorname(ci), "relinquished", privname(oldpriv));
+                sendstring(tmp, p);
+            }
+            else sendstring(msg, p);
+
             _putmaster(p);
-            sendpacket(-1, 1, p.finalize(), !ishidden ? -1 : ci->ownernum);
+            sendpacket(-1, 1, p.finalize(), !(ishidden || (oldpriv && washidden)) ? -1 : ci->ownernum);
         }
         
-        if(ishidden)
+        if(ishidden || (oldpriv && washidden))
         {
             packetbuf q(MAXTRANS, ENET_PACKET_FLAG_RELIABLE);
             putint(q, N_SERVMSG);
@@ -2356,7 +2368,7 @@ namespace server
         best.setsize(0); \
         best.add(clients[0]); \
         besti = best[0]->state.stat; \
-        for(int i = 1; i < clients.length(); i++) if(clients[i] && !clients[i]->_xi.spy) \
+        for(int i = 1; i < clients.length(); i++) if(!clients[i]->_xi.spy) \
         { \
             if(clients[i]->state.stat > besti) \
             { \
@@ -2420,7 +2432,7 @@ namespace server
                 best.setsize(0);
                 best.add(clients[0]);
                 besti = best[0]->state.damage*100/max(best[0]->state.shotdamage, 1);
-                loopv(clients)
+                for(int i = 1; i < clients.length(); i++) if(!clients[i]->_xi.spy)
                 {
                     if((clients[i]->state.damage*100/max(clients[i]->state.shotdamage, 1) > besti))
                     {
@@ -4306,26 +4318,44 @@ namespace server
             (cx->privilege!=privilege) &&
             (_getpriv(ci)>=privilege)))
         {
+            bool washidden = cx->_xi.spy || (serverhidepriv && cx->privilege >= serverhidepriv);
             bool ishidden = cx->_xi.spy || (serverhidepriv && privilege >= serverhidepriv);
+            int oldpriv = cx->privilege;
             
             defformatstring(msg)("%s %s %s%s", colorname(cx), privilege?"claimed":"relinquished",
-                                 privname(privilege?privilege:cx->privilege), !ishidden ? "" : " \f1(hidden)");
-            int oldpriv = (!serverhidepriv || cx->privilege < serverhidepriv) ? cx->privilege : PRIV_NONE;
+                                 privname(privilege ? privilege : cx->privilege), !(ishidden || (oldpriv && washidden && !privilege)) ? "" : " \f1(hidden)");
             cx->privilege = privilege;
             
-            if((!ishidden || oldpriv) && !cx->_xi.spy)
+            logoutf("%s", msg);
+            
+            bool hasmaster = false;
+            loopv(clients) if(clients[i]->privilege >= PRIV_MASTER) { hasmaster = true; break; }
+            if(!hasmaster)
+            {
+                mastermode = defaultmastermode;
+                if(mastermode < MM_PRIVATE) allowedips.shrink(0);
+            }
+
+            //if((!ishidden || oldpriv) && !cx->_xi.spy)
+            if((privilege && !ishidden && ((oldpriv && washidden) || (!oldpriv && !washidden))) || (oldpriv && !washidden))
             {
                 packetbuf p(MAXTRANS, ENET_PACKET_FLAG_RELIABLE);
                 putint(p, N_SERVMSG);
-                if(!ishidden) sendstring(msg, p);
-                else
+                if(washidden)
                 {
-                    defformatstring(tmp)("%s relinquished %s", colorname(cx), privname(oldpriv));
+                    defformatstring(tmp)("%s %s %s", colorname(cx), "claimed", privname(privilege));
                     sendstring(tmp, p);
                 }
+                else if(ishidden)
+                {
+                    defformatstring(tmp)("%s %s %s", colorname(cx), "relinquished", privname(oldpriv));
+                    sendstring(tmp, p);
+                }
+                else sendstring(msg, p);
+
                 _putmaster(p);
                 ENetPacket *_p = p.finalize();
-                if(!ishidden) sendpacket(-1, 1, _p);
+                if(!(ishidden || (oldpriv && washidden))) sendpacket(-1, 1, _p);
                 else
                 {
                     loopv(clients) if(clients[i]->state.aitype == AI_NONE && clients[i] != ci && clients[i] != cx)
@@ -4333,7 +4363,7 @@ namespace server
                 }
             }
             
-            if(ishidden)
+            if(ishidden || (oldpriv && washidden))
             {
                 packetbuf q(MAXTRANS, ENET_PACKET_FLAG_RELIABLE);
                 putint(q, N_SERVMSG);
