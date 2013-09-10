@@ -232,6 +232,8 @@ namespace server
         clientinfo *tkiller;
         int votekickvictim;
         char acinfo[AC_MAX];
+        int lastmsg, msgnum;
+        int lastremip, remipnum;
     };
     
     struct clientinfo
@@ -532,7 +534,7 @@ namespace server
             }
         }
         
-        logoutf(msg);
+        logoutf("%s", msg);
         
         if(anticheatmessages)
         {
@@ -1542,7 +1544,7 @@ namespace server
         if(authname && !val) return false;
         const char *name = "";
         int oldpriv = (!serverhidepriv || ci->privilege < serverhidepriv) ? ci->privilege : PRIV_NONE;
-
+        //int oldpriv = ci->privilege;
         if(val)
         {
             bool hasadminpass = adminpass[0] && checkpassword(ci, adminpass, pass);
@@ -1601,8 +1603,9 @@ namespace server
             else formatstring(msg)("%s claimed %s as '\fs\f5%s\fr'%s", colorname(ci), name, authname, !ishidden ? "" : " \f1(hidden)");
         } 
         else formatstring(msg)("%s %s %s%s", colorname(ci), val ? "claimed" : "relinquished", name, !ishidden ? "" : " \f1(hidden)");
-        logoutf(msg);
+        logoutf("%s", msg);
         
+        //if((!ishidden || (ishidden && oldpriv)) && (!serverhidepriv || oldpriv < serverhidepriv) && !ci->_xi.spy)
         if((!ishidden || oldpriv) && !ci->_xi.spy)
         {
             packetbuf p(MAXTRANS, ENET_PACKET_FLAG_RELIABLE);
@@ -1644,23 +1647,27 @@ namespace server
             if(vinfo && (priv >= vinfo->privilege) && vinfo->privilege < PRIV_ADMIN)
             {
                 if(trial) return true;
-                string kicker;
+                string kicker, msg;
                 if(authname)
                 {
                     if(authdesc && authdesc[0]) formatstring(kicker)("%s as '\fs\f5%s\fr' [\fs\f0%s\fr]", colorname(ci), authname, authdesc);
                     else formatstring(kicker)("%s as '\fs\f5%s\fr'", colorname(ci), authname);
                 }
                 else copystring(kicker, colorname(ci));
-                if(ci->_xi.spy)
+
+                if(!ci->_xi.spy)
                 {
-                    if(reason && reason[0]) sendservmsgf("%s was kicked because: %s", colorname(vinfo), reason);
-                    else sendservmsgf("%s was kicked", colorname(vinfo));
+                    if(reason && reason[0]) formatstring(msg)("%s kicked %s because: %s", kicker, colorname(vinfo), reason);
+                    else formatstring(msg)("%s kicked %s", kicker, colorname(vinfo));
                 }
                 else
                 {
-                    if(reason && reason[0]) sendservmsgf("%s kicked %s because: %s", kicker, colorname(vinfo), reason);
-                    else sendservmsgf("%s kicked %s", kicker, colorname(vinfo));
+                    if(reason && reason[0]) formatstring(msg)("%s was kicked because: %s", colorname(vinfo), reason);
+                    else formatstring(msg)("%s was kicked", colorname(vinfo));
                 }
+                sendf(-1, 1, "ris", N_SERVMSG, msg);
+                logoutf("%s", msg);
+                
                 uint ip = getclientip(victim);
                 addban(ip, 4*60*60000);
                 kickclients(ip, ci);
@@ -4110,7 +4117,7 @@ namespace server
 		{
 			defformatstring(msg)("%s = %i", cmd, getvar(cmd));
 			if(ci) sendf(ci->clientnum, 1, "ris", N_SERVMSG, msg);
-            else logoutf(msg);
+            else logoutf("%s", msg);
 		}
 	}
 	
@@ -4552,12 +4559,12 @@ namespace server
         addban(ip, t);
         kickclients(ip, 0);
     }
-
+    
     struct _kickvote
     {
         int cn, n;
+        bool kicked;
     };
-    
     void _checkvotekick(clientinfo *actor)
     {
         string msg, buf;
@@ -4594,25 +4601,26 @@ namespace server
             _kickvote &v = votes.add();
             v.cn = cn;
             v.n = 1;
+            v.kicked = false;
         }
         loopv(votes) if(votes[i].n >= nc/2)
         {
             uint ip = getclientip(votes[i].cn);
-            if(!ip) continue;
             clientinfo *ci = (clientinfo *)getclientinfo(votes[i].cn);
-            if(ci) formatstring(msg)("\f3[votekick] \f6votekick succeded for \f7%s \f5(%i)", ci->name, votes[i].cn);
-            else formatstring(msg)("\f3[votekick] \f6votekick succeded for \f0%i", votes[i].cn);
+            if(!ip || !ci) continue;
+            formatstring(msg)("\f3[votekick] \f6votekick succeded for \f7%s \f5(%i)", ci->name, votes[i].cn);
+            logoutf("%s", msg);
             sendf(-1, 1, "ris", N_SERVMSG, msg);
             addban(ip, 4*60*60000);
             kickclients(ip, 0);
-            votes.remove(i);
+            votes[i].kicked = true;
         }
 
         if(!timestat || totalmillis - timestat >= 2000)  //display stats each 2 voting seconds
         {
             timestat = totalmillis ? totalmillis : 1;
             formatstring(msg)("\f3[votekick]");
-            loopv(votes)
+            loopv(votes) if(!votes[i].kicked)
             {
                 clientinfo *ci = (clientinfo *)getclientinfo(votes[i].cn);  // null isnt possible
                 formatstring(buf)(" \f7%s \f5(%i) \f1(\f0%i\f1)", ci->name, votes[i].cn, votes[i].n);
@@ -4916,7 +4924,7 @@ namespace server
         
         defformatstring(msg)("nodamage %sabled", _nodamage ? "\f0en" : "\f4dis");
         if(!onlyask || ci) sendf((!onlyask || !ci) ? -1 : ci->clientnum, 1, "ris", N_SERVMSG, msg);
-        else logoutf(msg);
+        else logoutf("%s", msg);    //%s isnt needed, but eliminates some warnings
     }
     
 //  >>> Server internals
@@ -5386,13 +5394,13 @@ namespace server
             case N_TEXT:
             {
                 string ftext;
-                QUEUE_AI;
-                QUEUE_MSG;
+                //QUEUE_AI;
+                //QUEUE_MSG;
                 getstring(text, p);
                 if(!cq) break;
                 filtertext(ftext, text);
                 _checktext(ftext, ci);
-                char firstchar = ftext[0];
+                register char firstchar = ftext[0];
                 bool iscommand = false;
                 for(int z = 0; commandchars[z]; z++) if(firstchar == commandchars[z])
                 {
@@ -5401,27 +5409,33 @@ namespace server
                 }
                 if(iscommand)
                 {
-                    cq->messages.drop();
+                    //cq->messages.drop();
                     if(strlen(text) >= MAXSTRLEN) break;
                     logoutf("%s: %s", colorname(cq), ftext);
-                    _servcmd(text + 1, ci, firstchar);
+                    _servcmd(&text[1], ci, firstchar);
                 }
                 else
                 {
                     if(cq->_xi.spy)
                     {
-                        cq->messages.drop();
+                        //cq->messages.drop();
                         logoutf("%s: %s", colorname(cq), ftext);
-                        sendservmsgf("\f3[REMOTE:\f7%s \f5(%i)\f3] \f2%s", cq->name, cq->clientnum, text);
+                        //sendservmsgf("\f3[REMOTE:\f7%s\f3] \f7%s", cq->name, cq->clientnum, ftext);
+                        defformatstring(pubmsg)("\f3[REMOTE:\f7%s\f3] \f7%s", cq->name, text);
+                        defformatstring(spymsg)("\f3[REMOTE:\f7%s \f5(%i)\f3] \f7%s", cq->name, cq->clientnum, text);
+                        loopv(clients) if(clients[i]->state.aitype == AI_NONE)
+                            sendf(clients[i]->clientnum, 1, "ris", N_SERVMSG, (!clients[i]->_xi.spy) ? pubmsg : spymsg);
                     }
                     else if(ci->_xi.mute || cq->_xi.mute)
                     {
-                        cq->messages.drop();
+                        //cq->messages.drop();
                         sendf(sender, 1, "ris", N_SERVMSG, "\f5[MUTE] \f3You are muted");
                     }
                     else
                     {
                         logoutf("%s: %s", colorname(cq), ftext);
+                        QUEUE_AI;
+                        QUEUE_INT(N_TEXT);
                         QUEUE_STR(ftext);
                     }
                 }
@@ -5436,9 +5450,9 @@ namespace server
                 _checktext(text, ci);
                 if(cq->_xi.spy)
                 {
-                    defformatstring(msg)("\f1[REMOTECHAT:\f7%s\f1] \f0%s", colorname(cq), text);
+                    defformatstring(msg)("\f0[REMOTECHAT:\f7%s \f5(%i)\f0] \f1%s", cq->name, cq->clientnum, text);
                     loopv(clients) if(clients[i]->_xi.spy)
-                        sendf(clients[i]->clientnum, 1, "ris", N_SERVMSG, msg);
+                        sendf(clients[i]->ownernum, 1, "ris", N_SERVMSG, msg);
                     break;
                 }
                 //if(!m_teammode || !cq->team[0] || (ci->state.state==CS_SPECTATOR && !ci->local && !ci->privilege)) break;
@@ -5453,7 +5467,7 @@ namespace server
                 {
                     clientinfo *t = clients[i];
                     //if(t==cq || t->state.state==CS_SPECTATOR || t->state.aitype != AI_NONE || strcmp(cq->team, t->team)) continue;
-                    if(t==cq || t->state.aitype != AI_NONE) continue;
+                    if(t==cq || t->_xi.spy || t->state.aitype != AI_NONE) continue;
                     if(isntspectator == (t->state.state==CS_SPECTATOR)) continue;
                     if(isntspectator && m_teammode && strcmp(cq->team, t->team)) continue;
                     sendf(t->clientnum, 1, "riis", N_SAYTEAM, cq->clientnum, text);
@@ -5463,18 +5477,18 @@ namespace server
 
             case N_SWITCHNAME:
             {
-                QUEUE_MSG;
+                if(!ci->_xi.spy) QUEUE_MSG;
                 getstring(text, p);
                 filtertext(ci->name, text, false, MAXNAMELEN);
                 if(!ci->name[0]) copystring(ci->name, "unnamed");
-                QUEUE_STR(ci->name);
+                if(!ci->_xi.spy) QUEUE_STR(ci->name);
                 break;
             }
 
             case N_SWITCHMODEL:
             {
                 ci->playermodel = getint(p);
-                QUEUE_MSG;
+                if(!ci->_xi.spy) QUEUE_MSG;
                 break;
             }
 
@@ -5543,12 +5557,12 @@ namespace server
                     }
                     break;
                 }
-                if(cq && (ci != cq || ci->state.state!=CS_SPECTATOR)) { QUEUE_AI; QUEUE_MSG; }
+                if(cq && !ci->_xi.spy && (ci != cq || ci->state.state!=CS_SPECTATOR)) { QUEUE_AI; QUEUE_MSG; }
                 break;
             }
             
             case N_REMIP:
-                if(/*!ci || */ci->_xi.editmute || ci->state.state==CS_SPECTATOR) break;
+                if(/*!ci || */ci->_xi.editmute || ci->state.state==CS_SPECTATOR || ci->_xi.spy) break;
                 QUEUE_MSG;
                 break;
             
@@ -5558,7 +5572,7 @@ namespace server
                 loopk(3) getint(p);
                 int type = getint(p);
                 loopk(5) getint(p);
-                if(/*!ci || */ci->state.state==CS_SPECTATOR) break;
+                if(/*!ci || */ci->state.state==CS_SPECTATOR || ci->_xi.spy) break;
                 if(ci->_xi.editmute)
                 {
                     if(!ci->_xi.editmutewarn || totalmillis - ci->_xi.editmutewarn >= 10000)

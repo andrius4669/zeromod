@@ -45,7 +45,12 @@
         putint(q, ci->state.health);
         putint(q, ci->state.armour);
         putint(q, ci->state.gunselect);
-        putint(q, clamp(ci->privilege, int(PRIV_NONE), int(PRIV_ADMIN)));
+        
+        if((!serverhidepriv || ci->privilege < serverhidepriv) && !ci->_xi.spy)
+            putint(q, clamp(ci->privilege, int(PRIV_NONE), int(PRIV_ADMIN)));
+        else
+            putint(q, PRIV_NONE);
+        
         putint(q, (!ci->_xi.spy) ? ci->state.state : CS_SPECTATOR);
         // i think it volatiles users privacy; ip shouldnt be shown to everyone who wants
         uint ip = serverhideip ? 0 : getclientip(ci->clientnum);
@@ -105,7 +110,7 @@
                 clientinfo *ci = NULL;
                 if(cn >= 0)
                 {
-                    loopv(clients) if(clients[i]->clientnum == cn) { ci = clients[i]; break; }
+                    loopv(clients) if(clients[i]->clientnum == cn && !clients[i]->_xi.spy) { ci = clients[i]; break; }
                     if(!ci)
                     {
                         putint(p, EXT_ERROR); //client requested by id was not found
