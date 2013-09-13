@@ -2212,7 +2212,7 @@ namespace server
         scores.setsize(0);
         shouldcheckteamkills = false;
         teamkills.setsize(0);
-        loopv(clients) if(clients[i])
+        loopv(clients)
         {
             clientinfo *ci = clients[i];
             ci->state.timeplayed += lastmillis - ci->state.lasttimeplayed;
@@ -2237,7 +2237,7 @@ namespace server
             if(ci->state.state!=CS_SPECTATOR && !ci->_xi.spy) sendspawn(ci);
         }
 
-        if(!clearbots) loopv(bots) if(bots[i]->aireinit<1) bots[i]->aireinit = 1;
+        if(!clearbots) loopv(bots) if(bots[i] && bots[i]->aireinit < 1) bots[i]->aireinit = 1;
         aiman::changemap();
 
         if(m_demo)
@@ -2251,7 +2251,7 @@ namespace server
 
         if(smode) smode->setup();
         
-        _nodamage = disabledamage >= 0 ? disabledamage : 0;
+        _nodamage = disabledamage > 0 ? disabledamage : 0;
     }
 
     void rotatemap(bool next)
@@ -2358,7 +2358,7 @@ namespace server
         else
         {
             if(changed)
-				sendservmsgf("%s suggests %s on map %s (select map to vote)", colorname(ci), modename(reqmode), map[0] ? map : "[new map]");
+                sendservmsgf("%s suggests %s on map %s (select map to vote)", colorname(ci), modename(reqmode), map[0] ? map : "[new map]");
             checkvotes();
         }
     }
@@ -2583,12 +2583,13 @@ namespace server
             _cheater(ci, "gunhack", AC_GUNHACK, 100);
             return;
         }
+        if(!gs.isalive(gamemillis) || wait < gs.gunwait) return; //tolerate this
+        
         if(gs.ammo[gun] <= 0)
         {
-            if(!m_edit) _cheater(ci, "gunhack::noammo", AC_GUNHACK, 10);
+            if(!m_edit) _cheater(ci, "gunhack::noammo", AC_GUNHACK, 5);
             return;
         }
-        if(!gs.isalive(gamemillis) || wait < gs.gunwait) return; //tolerate this
         
         if(gun!=GUN_FIST) gs.ammo[gun]--;
         gs.lastshot = millis;
@@ -3463,10 +3464,10 @@ namespace server
             if(!ci) return;
             copystring(msg, "\f0[HELP] \f1Possible commands:", MAXTRANS);
             sendf(ci->ownernum, 1, "ris", N_SERVMSG, msg);
-            for(int priv = 0; priv<=min(_getpriv(ci), int(PRIV_ROOT)); priv++)
+            for(int priv = 0; priv <= min(ci->privilege, int(PRIV_ROOT)); priv++)
             {
                 first  = true;
-                loopv(_funcs) if(_funcs[i] && _funcs[i]->priv == priv)
+                loopv(_funcs) if(_funcs[i] && !_funcs[i]->hidden && !_funcs[i]->disabled && _funcs[i]->priv == priv)
                 {
                     if(first)
                     {
@@ -3500,7 +3501,7 @@ namespace server
 
             copystring(name, _manpages[i]->name, 256);
             c = _argsep(name, 16, names);
-            for(int j = 0; j < c; j++)
+            loopj(c)
             {
                 if(!strcmp(args, names[j]))
                 {
@@ -3528,11 +3529,11 @@ namespace server
 
         if(!found)
         {
-            if((++searchc) < 3 && _readmanfile(args)) goto _search;
-            else formatstring(msg)("\f1[HELP] \f2Man-page for command \f0%s \f2not found.", args);
+            if(++searchc < 3 && _readmanfile(args)) goto _search;
+            else formatstring(msg)("\f1[HELP] \f2Help page for command \f0%s \f2was not found.", args);
         }
         
-		sendf(ci ? ci->ownernum : -1, 1, "ris" , N_SERVMSG, msg);
+		sendf(ci->ownernum, 1, "ris" , N_SERVMSG, msg);
     }
     
     void _showgbans(const char *cmd, const char *args, clientinfo *ci)
@@ -3860,8 +3861,9 @@ namespace server
         bool found=false;
         int ret;
         
-        if(!name || !*name) return -1;  //<0==fail
-        for(int i = 0; i < _hookfuncs.length(); i++)
+        if(!name || !name[0]) return -1;  //<0==fail
+        //for(int i = 0; i < _hookfuncs.length(); i++)
+        loopvrev(_hookfuncs)
         {
             if(_hookfuncs[i] && !strcmp(_hookfuncs[i]->name, name))
             {
@@ -3875,7 +3877,7 @@ namespace server
                 break;
             }
         }
-        return found?ret:-1;
+        return found ? ret : -1;
     }
     
     void _addhook(const char *name, int (*hookfunc)(_hookparam *))
@@ -5317,7 +5319,7 @@ namespace server
                 
                 if(gunselect < GUN_FIST || gunselect > GUN_PISTOL)
                 {
-                    _cheater(cq, "gunhack", AC_GUNHACK, 100);
+                    _cheater(cq, "gunhack::gunselect", AC_GUNHACK, 100);
                     break;
                 }
                 cq->state.gunselect = !m_insta || gunselect == GUN_FIST || gunselect == GUN_RIFLE ? gunselect : GUN_FIST;
@@ -5377,7 +5379,7 @@ namespace server
                 if(cq) 
                 {
                     cq->addevent(shot);
-                    if(shot->gun > GUN_FIST && shot->gun <= GUN_PISTOL && cq->state.ammo[shot->gun]) cq->setpushed();  //DANGER may be used to hide cheat
+                    if(cq->state.hasammo(shot->gun, GUN_FIST)) cq->setpushed(); //DANGER may be used to hide cheat
                 }
                 else delete shot;
                 break;
