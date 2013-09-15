@@ -66,8 +66,8 @@ int on_connect(struct hookparam *hp)
     
     const char *country = GeoIP_country_name_by_addr(gi, ipaddr);
     
-    if(country && country[0]) sprintf(connmsg, "\f5[GeoIP] \f7%s \f2is connected from \f0%s \f5[%s]", name, country, ipaddr);
-    else sprintf(connmsg, "\f5[GeoIP] \f7%s \f2is connected from \f4Unknown \f5[%s]", name, ipaddr);
+    if(country && country[0]) sprintf(connmsg, "%s \f2is connected from \f0%s \f5[%s]", name, country, ipaddr);
+    else sprintf(connmsg, "%s \f2is connected from \f4Unknown \f5[%s]", name, ipaddr);
     
     notifypriv(connmsg, PRIV_ADMIN, PRIV_ROOT);
     
