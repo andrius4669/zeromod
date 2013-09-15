@@ -73,7 +73,7 @@ int on_connect(struct hookparam *hp)
     
     if(!country || !country[0]) return 0;
     
-    sprintf(connmsg, "\f5[GeoIP] \f7%s \f2is connected from \f0%s", name, country);
+    sprintf(connmsg, "%s \f2is connected from \f0%s", name, country);
     notifypriv(connmsg, PRIV_NONE, PRIV_AUTH);
     
     return 0;
