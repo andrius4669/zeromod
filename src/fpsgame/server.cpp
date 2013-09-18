@@ -3163,7 +3163,7 @@ namespace server
                     if(ci->connectauth) connected(ci);
                     if(ci->authkickvictim >= 0)
                     {
-                        if(setmaster(ci, true, "", ci->authname, ci->authdesc, u->privilege, false, true))
+                        if(u->privilege && setmaster(ci, true, "", ci->authname, ci->authdesc, u->privilege, false, true))
                             trykick(ci, ci->authkickvictim, ci->authkickreason, ci->authname, ci->authdesc, u->privilege);
                     }
                     else setmaster(ci, true, "", ci->authname, ci->authdesc, u->privilege);
