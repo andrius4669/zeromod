@@ -1539,6 +1539,8 @@ namespace server
         putint(p, -1);
     }
     
+    VAR(maxpassfail, 0, 16, 4096);  //maximum password attempts
+    
     bool setmaster(clientinfo *ci, bool val, const char *pass = "", const char *authname = NULL, const char *authdesc = NULL, int authpriv = PRIV_MASTER, bool force = false, bool trial = false)
     {
         if(authname && !val) return false;
@@ -1548,16 +1550,30 @@ namespace server
         bool washidden = (serverhidepriv && ci->privilege >= serverhidepriv) || ci->_xi.spy;
         if(val)
         {
-            bool hasadminpass = adminpass[0] && checkpassword(ci, adminpass, pass);
-            bool hasauthpass = authpass[0] && checkpassword(ci, authpass, pass);
-            bool hasmasterpass = masterpass[0] && checkpassword(ci, masterpass, pass);
-            if(pass && pass[0] && !hasadminpass && !hasauthpass && !hasmasterpass) ci->_xi.failpass++;
-            int wantpriv = (ci->_xi.failpass>=5)?authpriv:hasadminpass?PRIV_ADMIN:hasauthpass?PRIV_AUTH:hasmasterpass?PRIV_MASTER:authpriv;
+            /* Skip checking of passwords if password is already correct */
+            bool hasadminpass = (!maxpassfail || ci->_xi.failpass < maxpassfail) &&
+                    adminpass[0] && checkpassword(ci, adminpass, pass);
+            bool hasauthpass = (!maxpassfail || ci->_xi.failpass < maxpassfail) &&
+                    !hasadminpass && authpass[0] && checkpassword(ci, authpass, pass);
+            bool hasmasterpass = (!maxpassfail || ci->_xi.failpass < maxpassfail) &&
+                    !hasadminpass && !hasauthpass && masterpass[0] && checkpassword(ci, masterpass, pass);
+            if(pass && pass[0] && maxpassfail && !hasadminpass && !hasauthpass && !hasmasterpass)
+                ci->_xi.failpass = ((ci->_xi.failpass + 1) > 0) ? (ci->_xi.failpass + 1) : ci->_xi.failpass;
+            int wantpriv = (maxpassfail && ci->_xi.failpass >= maxpassfail)
+                ? authpriv
+                : hasadminpass
+                    ? PRIV_ADMIN
+                    : hasauthpass
+                        ? PRIV_AUTH
+                        : hasmasterpass
+                            ? PRIV_MASTER
+                            : authpriv;
+            
             if(ci->privilege)
             {
                 if(wantpriv <= ci->privilege) return true;
             }
-            else if(wantpriv <= PRIV_MASTER && !force && !authname)
+            else if(wantpriv <= PRIV_MASTER && !force && !authname && !hasmasterpass)
             {
                 if(ci->state.state==CS_SPECTATOR) 
                 {
@@ -2733,12 +2749,12 @@ namespace server
         }
 
         while(bannedips.length() && bannedips[0].expire-totalmillis <= 0) bannedips.remove(0);
-        loopv(connects) if(totalmillis-connects[i]->connectmillis>15000) disconnect_client(connects[i]->clientnum, DISC_TIMEOUT);
         while(_scheduled_disconnects.length())
         {
             disconnect_client(_scheduled_disconnects[0].n, _scheduled_disconnects[0].reason);
             _scheduled_disconnects.remove(0);
         }
+        loopv(connects) if(totalmillis-connects[i]->connectmillis>15000) disconnect_client(connects[i]->clientnum, DISC_TIMEOUT);
 
         if(nextexceeded && gamemillis > nextexceeded && (!m_timed || gamemillis < gamelimit))
         {
@@ -2749,8 +2765,8 @@ namespace server
                 if(c.state.aitype != AI_NONE) continue;
                 if(c.checkexceeded())
                 {
-                    logoutf("disconnecting because exceeded");
-                    disconnect_client(c.clientnum, DISC_MSGERR);
+                    _cheater(clients[i], "player position exceeded", AC_POSHACK, 100);
+                    //disconnect_client(c.clientnum, DISC_MSGERR);
                 }
                 else c.scheduleexceeded();
             }
@@ -5096,7 +5112,7 @@ namespace server
         if(!ci->connected)
         {
             if(chan==0) return;
-            else if(chan!=1) { logoutf("disconnected because isnt connected and chan != 1"); disconnect_client(sender, DISC_MSGERR); return; }
+            else if(chan!=1) { disconnect_client(sender, DISC_MSGERR); return; }
             else while(p.length() < p.maxlen) switch(checktype(getint(p), ci))
             {
                 case N_CONNECT:
