@@ -65,6 +65,7 @@ int on_connect(struct hookparam *hp)
     if(!name || !name[0] || !hp->args[2]) return 0;
     
     unsigned long ip = (unsigned long)(*(unsigned int *)hp->args[2]);
+    unsigned long tip = ((ip&0xFF)<<24)|((ip&0xFF00)<<16)|((ip&0xFF0000)<<8)|(ip&0xFF000000);   //translated to network byte order
     
     int searchcountry = gi ? 1 : 0;
     int searchcity = gic ? 1 : 0;
@@ -79,12 +80,12 @@ int on_connect(struct hookparam *hp)
     if(country) searchregion = searchcity = searchcountry = 0;  //do not do GeoIP lookup for reserved ip addresses
     
     //Get country name
-    if(searchcountry) country = GeoIP_country_name_by_ipnum(gi, ip);
+    if(searchcountry) country = GeoIP_country_name_by_ipnum(gi, tip);
     
     //Get city and region name
     if(searchcity || searchregion)
     {
-        gir = GeoIP_record_by_ipnum(gic, ip);
+        gir = GeoIP_record_by_ipnum(gic, tip);
         if(gir)
         {
             if(searchcity && gir->city && gir->city[0]) city = gir->city;
