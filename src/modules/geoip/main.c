@@ -57,6 +57,7 @@ int _argsep(char *str, int c, char **argv)
 //1 - (char *)name
 
 static char connmsg[260];
+static char ipaddr[16];
 
 int on_connect(struct hookparam *hp)
 {
@@ -64,14 +65,19 @@ int on_connect(struct hookparam *hp)
     
     if(!name || !name[0] || !hp->args[2]) return 0;
     
-    unsigned long ip = (unsigned long)(*(unsigned int *)hp->args[2]);
-    unsigned long tip = ((ip&0xFF)<<24)|((ip&0xFF00)<<16)|((ip&0xFF0000)<<8)|(ip&0xFF000000);   //translated to network byte order
+    unsigned int ip = *(unsigned int *)hp->args[2];
     
     int searchcountry = gi ? 1 : 0;
     int searchcity = gic ? 1 : 0;
     int searchregion = gic ? 1 : 0;
     const char *country = 0, *city = 0, *region = 0;
     GeoIPRecord *gir = 0;
+    
+    sprintf(ipaddr, "%u.%u.%u.%u",
+            (ip&0xFF),
+            ((ip>>8)&0xFF),
+            ((ip>>16)&0xFF),
+            ((ip>>24)&0xFF));
     
     //check for reserved ip addresses
     if     ((ip & 0x000000FF) == 0x0000007F) country = "localhost";                     //127.*.*.*
@@ -80,12 +86,12 @@ int on_connect(struct hookparam *hp)
     if(country) searchregion = searchcity = searchcountry = 0;  //do not do GeoIP lookup for reserved ip addresses
     
     //Get country name
-    if(searchcountry) country = GeoIP_country_name_by_ipnum(gi, tip);
+    if(searchcountry) country = GeoIP_country_name_by_addr(gi, ipaddr);
     
     //Get city and region name
     if(searchcity || searchregion)
     {
-        gir = GeoIP_record_by_ipnum(gic, tip);
+        gir = GeoIP_record_by_addr(gic, ipaddr);
         if(gir)
         {
             if(searchcity && gir->city && gir->city[0]) city = gir->city;
@@ -119,14 +125,7 @@ int on_connect(struct hookparam *hp)
     
     //add ip address to annoncement string and notify admins
     if(!first) strcat(connmsg, " \f2[");
-    //convert ip to string
-    char ipbuf[16];
-    sprintf(ipbuf, "%u.%u.%u.%u",
-            (unsigned int)(ip&0xFF),
-            (unsigned int)((ip>>8)&0xFF),
-            (unsigned int)((ip>>16)&0xFF),
-            (unsigned int)((ip>>24)&0xFF));
-    strcat(connmsg, ipbuf);
+    strcat(connmsg, ipaddr);
     if(!first) strcat(connmsg, "]");
     
     notifypriv(connmsg, PRIV_ADMIN, PRIV_ROOT);
