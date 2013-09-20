@@ -29,6 +29,8 @@ void (*delhook)(char *, int (*hookfunc)(struct hookparam *));
 GeoIP *gi  = 0;
 GeoIP *gic = 0;
 
+int needregion = 0;
+
 int _argsep(char *str, int c, char **argv)
 {
     char *s;
@@ -69,7 +71,7 @@ int on_connect(struct hookparam *hp)
     
     int searchcountry = gi ? 1 : 0;
     int searchcity = gic ? 1 : 0;
-    int searchregion = gic ? 1 : 0;
+    int searchregion = gic && needregion ? 1 : 0;
     const char *country = 0, *city = 0, *region = 0;
     GeoIPRecord *gir = 0;
     
@@ -108,17 +110,17 @@ int on_connect(struct hookparam *hp)
         first = 0;
         strcat(connmsg, city);
     }
-    if(country)
-    {
-        if(first) first = 0;
-        else strcat(connmsg, "\f1, \f0");
-        strcat(connmsg, country);
-    }
     if(region)
     {
         if(first) first = 0;
         else strcat(connmsg, "\f1, \f0");
         strcat(connmsg, region);
+    }
+    if(country)
+    {
+        if(first) first = 0;
+        else strcat(connmsg, "\f1, \f0");
+        strcat(connmsg, country);
     }
     
     if(!first) notifypriv(connmsg, PRIV_NONE, PRIV_AUTH);
@@ -160,6 +162,10 @@ char *z_init(void *getext, void *setext, char *args)
         
         case 'n':
             nomem = 1;
+            break;
+        
+        case 'r':
+            needregion = 1;
             break;
         
         default:
