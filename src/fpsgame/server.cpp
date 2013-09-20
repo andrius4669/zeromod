@@ -234,6 +234,7 @@ namespace server
         char acinfo[AC_MAX];
         int lastmsg, msgnum;
         int lastremip, remipnum;
+        int teamkillmessageindex;
     };
     
     struct clientinfo
@@ -808,6 +809,54 @@ namespace server
     COMMAND(teamkillkickreset, "");
     COMMANDN(teamkillkick, addteamkillkick, "sii");
 
+    struct teamkillmessage
+    {
+        char *message;
+        int modes;
+        
+        bool match(int mode) const
+        {
+            return (modes&(1<<(mode-STARTGAMEMODE)))!=0;
+        }
+    };
+    vector<teamkillmessage> teamkillmessages;
+    
+    void addteamkillmessage(char *modestr, char *message)
+    {
+        vector<char *> modes;
+        if(!modestr || !modestr[0] || !message || !message[0]) return;
+        explodelist(modestr, modes);
+        teamkillmessage &tkm = teamkillmessages.add();
+        tkm.message = newstring(message);
+        tkm.modes = genmodemask(modes);
+        modes.deletearrays();
+    }
+    ICOMMAND(teamkillmessage, "ss", (char *a, char *b), addteamkillmessage(a, b));
+    
+    void teamkillmessagereset()
+    {
+        loopv(teamkillmessages) DELETEA(teamkillmessages[i].message);
+        teamkillmessages.shrink(0);
+    }
+    COMMAND(teamkillmessagereset, "");
+    
+    void sendteamkillmessage(clientinfo *ci)
+    {
+        if(teamkillmessages.empty() || !ci || ci->state.aitype != AI_NONE) return;
+        if(!teamkillmessages.inrange(ci->_xi.teamkillmessageindex)) ci->_xi.teamkillmessageindex = 0;
+        bool found = false;
+        for(int t = 0; t < teamkillmessages.length(); t++)
+        {
+            if(teamkillmessages[(ci->_xi.teamkillmessageindex + t) % teamkillmessages.length()].match(gamemode))
+            {
+                found = true;
+                ci->_xi.teamkillmessageindex = (ci->_xi.teamkillmessageindex + t) % teamkillmessages.length();
+                break;
+            }
+        }
+        if(found) sendf(ci->clientnum, 1, "ris", N_SERVMSG, teamkillmessages[ci->_xi.teamkillmessageindex++]);
+    }
+    
     struct teamkillinfo
     {
         uint ip;
@@ -2513,6 +2562,7 @@ namespace server
             if(actor!=target && isteam(actor->team, target->team)) 
             {
                 actor->state.teamkills++;
+                sendteamkillmessage(actor);
                 target->_xi.tkiller = actor;
                 addteamkill(actor, target, 1);
             }
@@ -5446,6 +5496,16 @@ namespace server
                 //QUEUE_MSG;
                 getstring(text, p);
                 if(!cq) break;
+                
+                if(totalmillis - ci->_xi.lastmsg >= 200) ci->_xi.msgnum = 0;
+                else ci->_xi.msgnum = max(ci->_xi.msgnum + 1, ci->_xi.msgnum);
+                ci->_xi.lastmsg = totalmillis;
+                if(ci->_xi.msgnum >= 80)
+                {
+                    if(ci->_xi.msgnum < 160) sendf(sender, 1, "ris", N_SERVMSG, "\f3[ANTIFLOOD] N_TEXT was blocked");
+                    break;
+                }
+                
                 filtertext(ftext, text);
                 _checktext(ftext, ci);
                 register char firstchar = ftext[0];
@@ -5493,7 +5553,17 @@ namespace server
             case N_SAYTEAM:
             {
                 getstring(text, p);
-                if(/*!ci || */!cq) break;
+                if(!cq) break;
+                
+                if(totalmillis - ci->_xi.lastmsg >= 200) ci->_xi.msgnum = 0;
+                else ci->_xi.msgnum = max(ci->_xi.msgnum + 1, ci->_xi.msgnum);
+                ci->_xi.lastmsg = totalmillis;
+                if(ci->_xi.msgnum >= 80)
+                {
+                    if(ci->_xi.msgnum < 160) sendf(sender, 1, "ris", N_SERVMSG, "\f3[ANTIFLOOD] N_SAYTEAM was blocked");
+                    break;
+                }
+                
                 logoutf("%s <%s>: %s", colorname(cq), cq->team, text);
                 _checktext(text, ci);
                 if(cq->_xi.spy)
@@ -5525,17 +5595,40 @@ namespace server
 
             case N_SWITCHNAME:
             {
-                if(!ci->_xi.spy) QUEUE_MSG;
                 getstring(text, p);
+                
+                if(totalmillis - ci->_xi.lastmsg >= 200) ci->_xi.msgnum = 0;
+                else ci->_xi.msgnum = max(ci->_xi.msgnum + 1, ci->_xi.msgnum);
+                ci->_xi.lastmsg = totalmillis;
+                if(ci->_xi.msgnum >= 80)
+                {
+                    if(ci->_xi.msgnum < 160) sendf(sender, 1, "ris", N_SERVMSG, "\f3[ANTIFLOOD] N_SWITCHNAME was blocked");
+                    break;
+                }
+                
                 filtertext(ci->name, text, false, MAXNAMELEN);
                 if(!ci->name[0]) copystring(ci->name, "unnamed");
-                if(!ci->_xi.spy) QUEUE_STR(ci->name);
+                if(!ci->_xi.spy)
+                {
+                    QUEUE_INT(N_SWITCHNAME);
+                    QUEUE_STR(ci->name);
+                }
                 break;
             }
 
             case N_SWITCHMODEL:
             {
                 ci->playermodel = getint(p);
+                
+                if(totalmillis - ci->_xi.lastmsg >= 200) ci->_xi.msgnum = 0;
+                else ci->_xi.msgnum = max(ci->_xi.msgnum + 1, ci->_xi.msgnum);
+                ci->_xi.lastmsg = totalmillis;
+                if(ci->_xi.msgnum >= 64)
+                {
+                    if(ci->_xi.msgnum < 128) sendf(sender, 1, "ris", N_SERVMSG, "\f3[ANTIFLOOD] N_SWITCHMODEL was blocked");
+                    break;
+                }
+                
                 if(!ci->_xi.spy) QUEUE_MSG;
                 break;
             }
@@ -5611,6 +5704,14 @@ namespace server
             
             case N_REMIP:
                 if(/*!ci || */ci->_xi.editmute || ci->state.state==CS_SPECTATOR || ci->_xi.spy) break;
+                if(totalmillis - ci->_xi.lastremip >= 500) ci->_xi.remipnum = 0;
+                else ci->_xi.remipnum = max(ci->_xi.remipnum + 1, ci->_xi.remipnum);
+                ci->_xi.lastremip = totalmillis;
+                if(ci->_xi.remipnum >= 10)
+                {
+                    if(ci->_xi.remipnum < 20) sendf(sender, 1, "ris", N_SERVMSG, "\f3[ANTIFLOOD] N_REMIP was blocked");
+                    break;
+                }
                 QUEUE_MSG;
                 break;
             
@@ -5737,7 +5838,7 @@ namespace server
             {
                 int spectator = getint(p), val = getint(p);
                 if(!ci->privilege && (spectator!=sender || (ci->state.state==CS_SPECTATOR && (mastermode>=MM_LOCKED || ci->_xi.forcedspectator)))) break;
-                if(ci->_xi.spy && spectator == ci->clientnum)	//unspy spyer
+                if(ci->_xi.spy && spectator == ci->clientnum)   //unspy spyer
                 {
                     ci->state.state = (!val) ? CS_DEAD : CS_SPECTATOR;
                     _spy(ci, false);
@@ -5771,10 +5872,21 @@ namespace server
             {
                 int who = getint(p);
                 getstring(text, p);
+                
                 filtertext(text, text, false, MAXTEAMLEN);
                 if(!ci->privilege) break;
                 clientinfo *wi = getinfo(who);
                 if(!m_teammode || !text[0] || !wi || !strcmp(wi->team, text)) break;
+                
+                if(totalmillis - ci->_xi.lastmsg >= 200) ci->_xi.msgnum = 0;
+                else ci->_xi.msgnum = max(ci->_xi.msgnum + 1, ci->_xi.msgnum);
+                ci->_xi.lastmsg = totalmillis;
+                if(ci->_xi.msgnum >= 160)
+                {
+                    if(ci->_xi.msgnum < 320) sendf(sender, 1, "ris", N_SERVMSG, "\f3[ANTIFLOOD] N_SETTEAM was blocked");
+                    break;
+                }
+                
                 if((!smode || smode->canchangeteam(wi, wi->team, text)) && addteaminfo(text))
                 {
                     if(wi->state.state==CS_ALIVE) suicide(wi);
@@ -5846,6 +5958,14 @@ namespace server
             case N_NEWMAP:
             {
                 int size = getint(p);
+                if(totalmillis - ci->_xi.lastremip >= 500) ci->_xi.remipnum = 0;
+                else ci->_xi.remipnum = max(ci->_xi.remipnum + 1, ci->_xi.remipnum);
+                ci->_xi.lastremip = totalmillis;
+                if(ci->_xi.remipnum >= 10)
+                {
+                    if(ci->_xi.remipnum < 20) sendf(sender, 1, "ris", N_SERVMSG, "\f3[ANTIFLOOD] N_NEWMAP was blocked");
+                    break;
+                }
                 if(ci->_xi.editmute)
                 {
                     if(!ci->_xi.editmutewarn || totalmillis - ci->_xi.editmutewarn >= 10000)
@@ -5865,13 +5985,13 @@ namespace server
                     notgotitems = false;
                     if(smode) smode->newmap();
                     _nodamage = disabledamage >= 0 ? disabledamage : 0;
-					loopv(clients)
-					{
-						clientinfo &cx = *clients[i];
-						if(cx._xi.mute && cx._xi.mute < 2) cx._xi.mute = 0;
-						if(cx._xi.editmute && cx._xi.editmute < 2) cx._xi.editmute = 0;
-						if(cx._xi.forcedspectator && cx._xi.forcedspectator < 2) cx._xi.forcedspectator = 0;
-					}
+                    loopv(clients)
+                    {
+                        clientinfo &cx = *clients[i];
+                        if(cx._xi.mute && cx._xi.mute < 2) cx._xi.mute = 0;
+                        if(cx._xi.editmute && cx._xi.editmute < 2) cx._xi.editmute = 0;
+                        if(cx._xi.forcedspectator && cx._xi.forcedspectator < 2) cx._xi.forcedspectator = 0;
+                    }
                 }
                 QUEUE_MSG;
                 break;
@@ -6049,6 +6169,16 @@ namespace server
             {
                 string ftext;
                 getstring(text, p);
+                
+                if(totalmillis - ci->_xi.lastmsg >= 200) ci->_xi.msgnum = 0;
+                else ci->_xi.msgnum = max(ci->_xi.msgnum + 1, ci->_xi.msgnum);
+                ci->_xi.lastmsg = totalmillis;
+                if(ci->_xi.msgnum >= 80)
+                {
+                    if(ci->_xi.msgnum < 160) sendf(sender, 1, "ris", N_SERVMSG, "\f3[ANTIFLOOD] N_SERVCMD was blocked");
+                    break;
+                }
+                
                 if(/*!ci || */(strlen(text) > MAXSTRLEN)) break;
                 filtertext(ftext, text);
                 logoutf("N_SERVMSG:%s:%s", colorname(ci), ftext);
