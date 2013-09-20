@@ -1816,7 +1816,7 @@ namespace server
                 N_DEMOPLAYBACK, N_SENDMAP, N_DROPFLAG, N_SCOREFLAG, N_RETURNFLAG,
                 N_RESETFLAG, N_INVISFLAG, N_CLIENT, N_AUTHCHAL, N_INITAI,
                 N_EXPIRETOKENS, N_DROPTOKENS, N_STEALTOKENS, N_DEMOPACKET,
-                -2, N_REMIP, N_NEWMAP, N_GETMAP, N_SENDMAP, N_CLIPBOARD, N_EDITMODE, /* eihrul why you didn't added N_EDITMODE? */
+                -2, N_REMIP, N_NEWMAP, N_GETMAP, N_SENDMAP, N_CLIPBOARD,
                 -3, N_EDITENT, N_EDITF, N_EDITT, N_EDITM, N_FLIP, N_COPY, N_PASTE,
                 N_ROTATE, N_REPLACE, N_DELCUBE, N_EDITVAR, -4, N_POS, NUMMSG),
       connectfilter(-1, N_CONNECT, -2, N_AUTHANS, -3, N_PING, NUMMSG);
@@ -5317,7 +5317,15 @@ namespace server
             case N_EDITMODE:
             {
                 int val = getint(p);
-                if(!m_edit) { disconnect_client(sender, DISC_MSGERR); return; }
+                if(!m_edit)
+                {
+                    if(val)
+                    {
+                        disconnect_client(sender, DISC_MSGERR);
+                        return;
+                    }
+                    break;
+                }
                 if(val ? ci->state.state!=CS_ALIVE && ci->state.state!=CS_DEAD : ci->state.state!=CS_EDITING) break;
                 if(smode)
                 {
