@@ -1580,7 +1580,10 @@ namespace server
     {
         putint(p, N_CURRENTMASTER);
         putint(p, mastermode);
-        loopv(clients) if(clients[i]->privilege >= PRIV_MASTER && !clients[i]->_xi.spy && !(serverhidepriv && clients[i]->privilege >= serverhidepriv))
+        loopv(clients) if(clients[i]->privilege >= PRIV_MASTER &&
+            !clients[i]->_xi.spy &&
+            !(serverhidepriv > 0 && clients[i]->privilege >= (serverhidepriv == 1 ? PRIV_ADMIN : PRIV_AUTH) &&
+                !(clients[i]->privilege == PRIV_AUTH && clients[i]->authname[0] && !clients[i]->authdesc[0])))
         {
             putint(p, clients[i]->clientnum);
             putint(p, clamp(clients[i]->privilege, int(PRIV_NONE), int(PRIV_ADMIN)));
@@ -1599,7 +1602,7 @@ namespace server
         /* if authname exists and authdesc does not, this is gauth: do not hide privilege */
         bool washidden = (serverhidepriv > 0 &&
                             ci->privilege >= (serverhidepriv == 1 ? PRIV_ADMIN : PRIV_AUTH) &&
-                            !(ci->authname[0] && !ci->authdesc[0])) ||
+                            !(ci->privilege == PRIV_AUTH && ci->authname[0] && !ci->authdesc[0])) ||
                             ci->_xi.spy;
         
         if(val)
@@ -1665,7 +1668,7 @@ namespace server
         bool ishidden = ci->_xi.spy ||
                         (serverhidepriv > 0 &&
                         ci->privilege >= (serverhidepriv == 1 ? PRIV_ADMIN : PRIV_AUTH) &&
-                        !(ci->authname[0] && !ci->authdesc[0]));
+                        !(ci->privilege == PRIV_AUTH && ci->authname[0] && !ci->authdesc[0]));
         
         string msg;
         if(val && authname)
@@ -2128,7 +2131,10 @@ namespace server
             putint(p, mastermode);
             hasmaster = true;
         }
-        loopv(clients) if(clients[i]->privilege >= PRIV_MASTER && !clients[i]->_xi.spy && (!serverhidepriv || clients[i]->privilege < serverhidepriv))
+        loopv(clients) if(clients[i]->privilege >= PRIV_MASTER &&
+            !clients[i]->_xi.spy &&
+            !(serverhidepriv > 0 && clients[i]->privilege >= (serverhidepriv == 1 ? PRIV_ADMIN : PRIV_AUTH) &&
+                !(ci->privilege == PRIV_AUTH && ci->authname[0] && !ci->authdesc[0])))
         {
             if(!hasmaster)
             {
@@ -3817,7 +3823,8 @@ namespace server
                 ci->state.timeplayed += lastmillis - ci->state.lasttimeplayed;
             }
             aiman::removeai(ci);
-            if(ci->privilege && (!serverhidepriv || ci->privilege < serverhidepriv))
+            if(ci->privilege && !(serverhidepriv > 0 && ci->privilege >= (serverhidepriv == 1 ? PRIV_ADMIN : PRIV_AUTH) &&
+                !(ci->privilege == PRIV_AUTH && ci->authname[0] && !ci->authdesc[0])))
             {
                 //send out privileges
                 packetbuf p(MAXTRANS, ENET_PACKET_FLAG_RELIABLE);
@@ -4390,8 +4397,9 @@ namespace server
             (cx->privilege!=privilege) &&
             (_getpriv(ci)>=privilege)))
         {
-            bool washidden = cx->_xi.spy || (serverhidepriv && cx->privilege >= serverhidepriv);
-            bool ishidden = cx->_xi.spy || (serverhidepriv && privilege >= serverhidepriv);
+            bool washidden = cx->_xi.spy || (serverhidepriv > 0 && cx->privilege >= (serverhidepriv == 1 ? PRIV_ADMIN : PRIV_AUTH) &&
+                !(ci->privilege == PRIV_AUTH && ci->authname[0] && !ci->authdesc[0]));
+            bool ishidden = cx->_xi.spy || (serverhidepriv && privilege >= (serverhidepriv == 1 ? PRIV_ADMIN : PRIV_AUTH));
             int oldpriv = cx->privilege;
             
             defformatstring(msg)("%s %s %s%s", colorname(cx), privilege?"claimed":"relinquished",
@@ -5101,7 +5109,7 @@ namespace server
     void _privfail(clientinfo *ci)
     {
         if(!ci) return;
-        sendf(ci->ownernum, 1, "ris", N_SERVMSG, "\f6You do not have enough privileges to execute this command");
+        sendf(ci->ownernum, 1, "ris", N_SERVMSG, "\f3You do not have enough privileges to execute this command");
     }
     
     void _nocommand(const char *cmd, clientinfo *ci)
@@ -5110,8 +5118,8 @@ namespace server
         
         if(!ci || !cmd || !cmd[0]) return;
         
-        if(commandchars[0]) formatstring(msg)("\f6Unknown command \"\f0%s\f6\". For a list of avaiable commands type \"\f0%chelp\f6\"", cmd, commandchars[0]);
-        else formatstring(msg)("\f6Unknown command \"\f0%s\f6\". For a list of avaiable commands type \"\f0/servcmd help\f6\"", cmd);
+        if(commandchars[0]) formatstring(msg)("\f3Unknown command \"\f0%s\f3\". For a list of avaiable commands type \"\f0%chelp\f3\"", cmd, commandchars[0]);
+        else formatstring(msg)("\f3Unknown command \"\f0%s\f3\". For a list of avaiable commands type \"\f3/servcmd help\f3\"", cmd);
         sendf(ci->ownernum, 1, "ris", N_SERVMSG, msg);
     }
     
@@ -5137,7 +5145,7 @@ namespace server
             {
                 if(_funcs[i]->disabled && _getpriv(ci) < PRIV_ROOT)
                 {
-                    if(ci) sendf(ci->ownernum, 1, "ris", N_SERVMSG, "^f6This command is disabled");
+                    if(ci) sendf(ci->ownernum, 1, "ris", N_SERVMSG, "\f6This command is disabled");
                 }
                 else if(_getpriv(ci) >= _funcs[i]->priv)
                 {
