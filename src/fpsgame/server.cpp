@@ -2134,7 +2134,7 @@ namespace server
         loopv(clients) if(clients[i]->privilege >= PRIV_MASTER &&
             !clients[i]->_xi.spy &&
             !(serverhidepriv > 0 && clients[i]->privilege >= (serverhidepriv == 1 ? PRIV_ADMIN : PRIV_AUTH) &&
-                !(ci->privilege == PRIV_AUTH && ci->authname[0] && !ci->authdesc[0])))
+                !(clients[i]->privilege == PRIV_AUTH && clients[i]->authname[0] && !clients[i]->authdesc[0])))
         {
             if(!hasmaster)
             {
@@ -4398,7 +4398,7 @@ namespace server
             (_getpriv(ci)>=privilege)))
         {
             bool washidden = cx->_xi.spy || (serverhidepriv > 0 && cx->privilege >= (serverhidepriv == 1 ? PRIV_ADMIN : PRIV_AUTH) &&
-                !(ci->privilege == PRIV_AUTH && ci->authname[0] && !ci->authdesc[0]));
+                !(cx->privilege == PRIV_AUTH && cx->authname[0] && !cx->authdesc[0]));
             bool ishidden = cx->_xi.spy || (serverhidepriv && privilege >= (serverhidepriv == 1 ? PRIV_ADMIN : PRIV_AUTH));
             int oldpriv = cx->privilege;
             
