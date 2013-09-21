@@ -4386,7 +4386,7 @@ namespace server
         cx = (clientinfo *)getclientinfo(cn);
         if(!cx)
         {
-            defformatstring(msg)("\f2[FAIL] Unknown client number \f0%i", cn);
+            defformatstring(msg)("\f3Unknown client number \f0%i", cn);
             _notify(msg, ci);
             return;
         }
@@ -4405,6 +4405,9 @@ namespace server
             defformatstring(msg)("%s %s %s%s", colorname(cx), privilege?"claimed":"relinquished",
                                  privname(privilege ? privilege : cx->privilege), !(ishidden || (oldpriv && washidden && !privilege)) ? "" : " \f1(hidden)");
             cx->privilege = privilege;
+            
+            //if was gauther, unset authname, so it will be no longer identified as claimed as gauther
+            if(cx->authname[0] && !cx->authdesc[0]) cx->authname[0] = '\0';
             
             logoutf("%s", msg);
             
