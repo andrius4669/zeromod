@@ -26,6 +26,7 @@ namespace server
     _hookparam _hp;
     
     int _exechook(const char *name);
+    static void _enablefunc(const char *s, bool val);
     void _initfuncs();
     void _initman();
     
@@ -754,15 +755,14 @@ namespace server
     VAR(serversuggestnp, 0, 1, 1);                  //decides if server suggest players to say #np
     SVAR(commandchars, "#");                        //defines characters which are interepted as command starting characters
     VARF(defaultgamemode, 0, 0, NUMGAMEMODES+STARTGAMEMODE, { if(!m_mp(defaultgamemode)) defaultgamemode = 0; });
-    VAR(disabledamage, -1, -1, 1);                   //disable damage in coop, -1 = not allowed
+    VARF(disabledamage, -1, -1, 1, { _enablefunc("nodamage", disabledamage>=0); }); //disable damage in coop, -1 = not allowed
     int _nodamage = 0;
     VAR(defaultmastermode, MM_AUTH, MM_OPEN, MM_PASSWORD);
-    VAR(serverhidepriv, PRIV_NONE, PRIV_NONE, PRIV_ROOT);
+    VAR(serverhidepriv, 0, 0, 2);   //0 - no, 1 - >=admin, 2 - >=auth
     
     SVAR(serverdesc, "");
     SVAR(serverpass, "");
     SVAR(adminpass, "");
-    SVAR(authpass, "");
     SVAR(masterpass, "");
     VARF(publicserver, 0, 0, 2, {
 		switch(publicserver)
@@ -987,6 +987,7 @@ namespace server
         resetitems();
         _initfuncs();
         _initman();
+        _enablefunc("nodamage", disabledamage>=0);
     }
 
     int numclients(int exclude = -1, bool nospec = true, bool noai = true, bool priv = false)
@@ -1538,7 +1539,6 @@ namespace server
         u.pubkey = parsepubkey(pubkey);
         switch(priv[0])
         {
-            case 'c': case 'C': u.privilege = PRIV_MASTER; break;
             case 'r': case 'R': u.privilege = PRIV_ROOT; break;
             case 'a': case 'A': u.privilege = PRIV_ADMIN; break;
             case 'n': case 'N': u.privilege = PRIV_NONE; break;
@@ -1594,35 +1594,38 @@ namespace server
     {
         if(authname && !val) return false;
         const char *name = "";
-        //int oldpriv = (!serverhidepriv || ci->privilege < serverhidepriv) ? ci->privilege : PRIV_NONE;
         int oldpriv = ci->privilege;
-        bool washidden = (serverhidepriv && ci->privilege >= serverhidepriv) || ci->_xi.spy;
+        
+        /* if authname exists and authdesc does not, this is gauth: do not hide privilege */
+        bool washidden = (serverhidepriv > 0 &&
+                            ci->privilege >= (serverhidepriv == 1 ? PRIV_ADMIN : PRIV_AUTH) &&
+                            !(ci->authname[0] && !ci->authdesc[0])) ||
+                            ci->_xi.spy;
+        
         if(val)
         {
             /* Skip checking of passwords if password is already correct */
             bool hasadminpass = (!maxpassfail || ci->_xi.failpass < maxpassfail) &&
                     adminpass[0] && checkpassword(ci, adminpass, pass);
-            bool hasauthpass = (!maxpassfail || ci->_xi.failpass < maxpassfail) &&
-                    !hasadminpass && authpass[0] && checkpassword(ci, authpass, pass);
             bool hasmasterpass = (!maxpassfail || ci->_xi.failpass < maxpassfail) &&
-                    !hasadminpass && !hasauthpass && masterpass[0] && checkpassword(ci, masterpass, pass);
-            if(pass && pass[0] && maxpassfail && !hasadminpass && !hasauthpass && !hasmasterpass)
-                ci->_xi.failpass = ((ci->_xi.failpass + 1) > 0) ? (ci->_xi.failpass + 1) : ci->_xi.failpass;
+                    !hasadminpass && masterpass[0] && checkpassword(ci, masterpass, pass);
+            /* If incorrect password was given, register this as failed attempt */
+            if(pass && pass[0] && maxpassfail && !hasadminpass && !hasmasterpass)
+                ci->_xi.failpass = max(ci->_xi.failpass + 1, ci->_xi.failpass);
+            
             int wantpriv = (maxpassfail && ci->_xi.failpass >= maxpassfail)
                 ? authpriv
                 : hasadminpass
                     ? PRIV_ADMIN
-                    : hasauthpass
-                        ? PRIV_AUTH
-                        : hasmasterpass
-                            ? PRIV_MASTER
-                            : authpriv;
+                    : hasmasterpass
+                        ? PRIV_MASTER
+                        : authpriv;
             
             if(ci->privilege)
             {
                 if(wantpriv <= ci->privilege) return true;
             }
-            else if(wantpriv <= PRIV_MASTER && !force && !authname && !hasmasterpass)
+            else if(wantpriv <= PRIV_MASTER && !force && !hasmasterpass)
             {
                 if(ci->state.state==CS_SPECTATOR) 
                 {
@@ -1659,7 +1662,10 @@ namespace server
             if(mastermode < MM_PRIVATE) allowedips.shrink(0);
         }
         
-        bool ishidden = ci->_xi.spy || (serverhidepriv && ci->privilege >= serverhidepriv);
+        bool ishidden = ci->_xi.spy ||
+                        (serverhidepriv > 0 &&
+                        ci->privilege >= (serverhidepriv == 1 ? PRIV_ADMIN : PRIV_AUTH) &&
+                        !(ci->authname[0] && !ci->authdesc[0]));
         
         string msg;
         if(val && authname)
@@ -1671,10 +1677,9 @@ namespace server
         } 
         else formatstring(msg)("%s %s %s%s", colorname(ci), val ? "claimed" : "relinquished", name,
             !(ishidden || (oldpriv && washidden)) ? "" : " \f1(hidden)");
-        logoutf("%s", msg);
         
-        //if((!ishidden || (ishidden && oldpriv)) && (!serverhidepriv || oldpriv < serverhidepriv) && !ci->_xi.spy)
-        //if((!ishidden || oldpriv) && !ci->_xi.spy)
+        logoutf("%s", msg);
+
         if((ci->privilege && !ishidden && ((oldpriv && washidden) || (!oldpriv && !washidden))) || (oldpriv && !washidden))
         {
             packetbuf p(MAXTRANS, ENET_PACKET_FLAG_RELIABLE);
@@ -3093,7 +3098,6 @@ namespace server
             return DISC_NONE;
         }
         if(adminpass[0] && checkpassword(ci, adminpass, pwd)) return DISC_NONE;
-        if(authpass[0] && checkpassword(ci, authpass, pwd)) return DISC_NONE;
         if(numclients(-1, false, true)>=maxclients) return DISC_MAXCLIENTS;
         if(masterpass[0] && checkpassword(ci, masterpass, pwd)) return DISC_NONE;
         uint ip = getclientip(ci->clientnum);
@@ -3133,7 +3137,7 @@ namespace server
         clientinfo *ci = findauth(id);
         if(!ci) return;
         ci->cleanauth(ci->connectauth!=0);
-        if(ci->connectauth) connected(ci);
+        if(ci->connectauth && !ci->connected) connected(ci);
         if(ci->authkickvictim >= 0)
         {
             if(setmaster(ci, true, "", ci->authname, NULL, PRIV_AUTH, false, true))
@@ -3210,7 +3214,7 @@ namespace server
                 userinfo *u = users.access(userkey(ci->authname, ci->authdesc));
                 if(u) 
                 {
-                    if(ci->connectauth) connected(ci);
+                    if(ci->connectauth && !ci->connected) connected(ci);
                     if(ci->authkickvictim >= 0)
                     {
                         if(u->privilege && setmaster(ci, true, "", ci->authname, ci->authdesc, u->privilege, false, true))
@@ -4113,7 +4117,7 @@ namespace server
                 if(reinitfunc)
                 {
                     char *ret;
-                    _debug("z_reinit found");
+                    //_debug("z_reinit found");
                     ret = reinitfunc();
                     if(ret)
                     {
@@ -4129,13 +4133,13 @@ namespace server
             }
             if(needunload)
             {
-                _debug("unloading");
+                //_debug("unloading");
                 char *(*uninitfunc)();
                 *(Z_LIBFUNC *)(&uninitfunc) = Z_GETSYM(m->h, "z_uninit");
                 if(uninitfunc)
                 {
                     char *ret;
-                    _debug("z_uninit found");
+                    //_debug("z_uninit found");
                     ret = uninitfunc();
                     if(ret)
                     {
@@ -4170,7 +4174,7 @@ namespace server
                 return;
             }
             
-            _debug("executing z_init");
+            //_debug("executing z_init");
             
             char *ret;
             ret = initfunc((void *)_getext, (void *)_setext, argv[1]);
@@ -4465,7 +4469,7 @@ namespace server
         if(!ci) return;
         if(!m_teammode || !ci->_xi.tkiller)
         {
-            formatstring(msg)("\f1[FORGIVE] no teamkills to forgive");
+            formatstring(msg)("\f4no teamkills to forgive");
             sendf(ci->clientnum, 1, "ris", N_SERVMSG, msg);
             return;
         }
@@ -4473,10 +4477,10 @@ namespace server
         addteamkill(ci->_xi.tkiller, ci, -1);
         if(ci->_xi.tkiller->state.aitype == AI_NONE)
         {
-            formatstring(msg)("\f1[FORGIVE] \f7%s \f0forgave \f1your \f3teamkill", colorname(ci));
+            formatstring(msg)("\f3[teamkill] \f7%s \f0forgave \f1your \f3teamkill", colorname(ci));
             sendf(ci->_xi.tkiller->clientnum, 1, "ris", N_SERVMSG, msg);
         }
-        formatstring(msg)("\f1[FORGIVE] \f7%s \f1teamkill forgiven", colorname(ci->_xi.tkiller));
+        formatstring(msg)("\f3[teamkill] \f7%s \f2teamkill forgiven", colorname(ci->_xi.tkiller));
         sendf(ci->clientnum, 1, "ris", N_SERVMSG, msg);
         ci->_xi.tkiller = 0;
     }
@@ -4754,7 +4758,7 @@ namespace server
         return true;
     }
     
-    VAR(votekick, 0, 1, 1);
+    VARF(votekick, 0, 1, 1, { _enablefunc("votekick", votekick); });
     
     void _votekickfunc(const char *cmd, const char *args, clientinfo *ci)
     {
@@ -5037,6 +5041,23 @@ namespace server
         loopi(argc) if(argv[i]) _funcs.add(new _funcdeclaration(argv[i], priv, _func));
     }
     
+    static void _enablefunc(const char *s, bool val)
+    {
+        char buf[MAXTRANS];
+        int argc;
+        char *argv[260];
+        copystring(buf, s, MAXTRANS);
+        argc = _argsep(buf, 260, argv);
+        loopk(argc) if(argv[k])
+        {
+            loopv(_funcs) if(_funcs[i] && !strcmp(argv[k], _funcs[i]->name))
+            {
+                _funcs[i]->disabled = val;
+                break;
+            }
+        }
+    }
+    
     static void _addhiddenfunc(const char *s, int priv, void (*_func)(const char *cmd, const char *args, clientinfo *ci))
     {
         char buf[MAXTRANS];
@@ -5050,7 +5071,8 @@ namespace server
     void _initfuncs()
     {
         _addfunc("wall announce", PRIV_AUTH, _wall);
-        _addfunc("help man", 0, _man);
+        _addfunc("help", 0, _man);
+        _addhiddenfunc("man", 0, _man);
         _addfunc("info", 0, _info);
         _addfunc("version", 0, _info);
         _addfunc("pm", 0, _pm);
@@ -5079,26 +5101,25 @@ namespace server
     void _privfail(clientinfo *ci)
     {
         if(!ci) return;
-        sendf(ci->clientnum, 1, "ris", N_SERVMSG, "\f4[PRIV] \f5You aren't privileged to do this task");
+        sendf(ci->ownernum, 1, "ris", N_SERVMSG, "\f6You do not have enough privileges to execute this command");
     }
     
     void _nocommand(const char *cmd, clientinfo *ci)
     {
+        string msg;
+        
         if(!ci || !cmd || !cmd[0]) return;
-        defformatstring(msg)("\f5[????] \f2Undefined command \f0%s\f2. Please see manual (type \f0#man\f2)", cmd);
-        sendf(ci->clientnum, 1, "ris", N_SERVMSG, msg);
+        
+        if(commandchars[0]) formatstring(msg)("\f6Unknown command \"\f0%s\f6\". For a list of avaiable commands type \"\f0%chelp\f6\"", cmd, commandchars[0]);
+        else formatstring(msg)("\f6Unknown command \"\f0%s\f6\". For a list of avaiable commands type \"\f0/servcmd help\f6\"", cmd);
+        sendf(ci->ownernum, 1, "ris", N_SERVMSG, msg);
     }
     
     inline int _getpriv(clientinfo *ci)
     {
-        return ci?ci->privilege:PRIV_ROOT;
+        return ci ? ci->privilege : PRIV_ROOT;
     }
-    
-    inline bool _checkpriv(clientinfo *ci, int priv)
-    {
-        return (_getpriv(ci)>=priv);
-    }
-    
+        
     void _servcmd(const char *cmd, clientinfo *ci, char cmdchar = 0)
     {
         char *argv[2];
@@ -5110,11 +5131,15 @@ namespace server
         _argsep(str, 2, argv);
         filtertext(argv[0], argv[0]);
         
-        loopv(_funcs)
+        loopv(_funcs) if(_funcs[i])
         {
             if(!strcmp(argv[0], _funcs[i]->name))
             {
-                if(_funcs[i] && _checkpriv(ci, _funcs[i]->priv))
+                if(_funcs[i]->disabled && _getpriv(ci) < PRIV_ROOT)
+                {
+                    if(ci) sendf(ci->ownernum, 1, "ris", N_SERVMSG, "^f6This command is disabled");
+                }
+                else if(_getpriv(ci) >= _funcs[i]->priv)
                 {
                     //execute function
                     _funcs[i]->func(argv[0], argv[1] ? argv[1] : "", ci);
@@ -5141,12 +5166,16 @@ namespace server
         if(argc >= 2 && (argv[0][0]=='n' || argv[0][0]=='N') && (argv[1][0]=='p' || argv[1][0]=='P') && (argv[1][1]=='r' || argv[1][1]=='R')) goto _np;
         return;
     _np:
-        sendf(ci->clientnum, 1, "ris", N_SERVMSG, "\f1[FORGIVE] type #np if you want to forgive teamkill");
+        if(commandchars[0])
+            sendf(ci->ownernum, 1, "ris", N_SERVMSG, "\f3[teamkill] \f2type \"\f0%cnp\f2\" to to forgive \f7%s \f2teamkill",
+                  commandchars[0], colorname(ci->_xi.tkiller));
+        else
+            sendf(ci->ownernum, 1, "ris", N_SERVMSG, "\f3[teamkill] \f2type \"\f0/servcmd np\f2\" to to forgive \f7%s \f2teamkill",
+                  colorname(ci->_xi.tkiller));
     }
     
     ICOMMAND(zexec, "C", (char *cmd), _servcmd(cmd, 0));
     ICOMMAND(zload, "C", (char *modulename), _load("load", modulename, 0));
-    //ICOMMAND(zset, "C", (char *setting), _set("set", setting, 0));
     ICOMMAND(zwall, "C", (char *message), _wall(0, message, 0));
     ICOMMAND(announce, "C", (char *message), _wall(0, message, 0));
     
@@ -5158,7 +5187,7 @@ namespace server
         char text[MAXTRANS];
         int type;
         clientinfo *ci = getinfo(sender), *cq = ci, *cm = ci;
-		if(!ci) return;
+        if(!ci) return; //zeromod: should never happen
         if(!ci->connected)
         {
             if(chan==0) return;
@@ -5210,7 +5239,6 @@ namespace server
                     break;
 
                 default:
-                    logoutf("disconnected because unknown packet and not connected");
                     disconnect_client(sender, DISC_MSGERR);
                     return;
             }
