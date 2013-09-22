@@ -236,6 +236,8 @@ namespace server
         int lastmsg, msgnum;
         int lastremip, remipnum;
         int teamkillmessageindex;
+        int lasttakeflag;
+        bool flagrunvalid;
     };
     
     struct clientinfo
@@ -428,6 +430,7 @@ namespace server
     bool gamepaused = false, shouldstep = true;
 
     void checkmaps(int req = -1);
+    const char *colorname(clientinfo *ci, char *name = NULL);
     int _getpriv(clientinfo *ci);
 	void _forcespectator(clientinfo *ci, int spec);
     
@@ -552,6 +555,54 @@ namespace server
         
         if(n >= 100 || (anticheat >= 4 && n == 0))
             _schedule_disconnect(ci->ownernum, DISC_MSGERR);
+    }
+
+    struct _flagrun
+    {
+        char *map;
+        int gamemode;
+        char *name;
+        int timeused;
+    };
+    vector<_flagrun> _flagruns;
+
+    VAR(serverflagruns, 0, 0, 1);
+
+    void _doflagrun(clientinfo *ci, int timeused)
+    {
+        ci->_xi.lasttakeflag = 0;
+        ci->_xi.flagrunvalid = 0;
+        if(timeused <= 500) _cheater(ci, "flaghack", AC_FLAGHACK, 50);
+        if(serverflagruns)
+        {
+            _flagrun *fr = 0;
+            loopv(_flagruns) if(_flagruns[i].gamemode == gamemode && !strcmp(_flagruns[i].name, smapname))
+            { fr = &_flagruns[i]; break; }
+            if(!fr)
+            {
+                int lastfr = _flagruns.length();
+                if(lastfr >= 1024) return;
+                _flagruns.add();
+                _flagruns[lastfr].map = newstring(smapname);
+                _flagruns[lastfr].gamemode = gamemode;
+                _flagruns[lastfr].name = 0;
+                _flagruns[lastfr].timeused = INT_MAX;
+                fr = &_flagruns[lastfr];
+            }
+            bool isbest = timeused <= fr->timeused;
+            if(isbest)
+            {
+                DELETEA(fr->name);
+                fr->name = newstring(ci->name ? ci->name : "unnamed");
+                fr->timeused = timeused;
+            }
+            string msg;
+            if(isbest) formatstring(msg)("\f0[flagrun] \f7%s \f2did flagrun in \f0%i.%02i secconds \f1(\f0best\f1)",
+                colorname(ci), timeused/1000, (timeused%1000)/10);
+            else formatstring(msg)("\f0[flagrun] \f7%s \f2did flagrun in \f0%i.%02i secconds \f1(\f0best: \f7%s \f2%i.%02i\f1)",
+                colorname(ci), timeused/1000, (timeused%1000)/10, fr->name, fr->timeused/1000, (fr->timeused%1000)/10);
+            sendservmsg(msg);
+        }
     }
 
     struct maprotation
@@ -759,6 +810,9 @@ namespace server
     int _nodamage = 0;
     VAR(defaultmastermode, MM_AUTH, MM_OPEN, MM_PASSWORD);
     VAR(serverhidepriv, 0, 0, 2);   //0 - no, 1 - >=admin, 2 - >=auth
+    VARF(votekick, 0, 1, 1, { _enablefunc("votekick", votekick); });
+    SVAR(serveradmin, "");
+    VAR(persistteams, 0, 0, 1);
     
     SVAR(serverdesc, "");
     SVAR(serverpass, "");
@@ -856,7 +910,7 @@ namespace server
         }
         if(found) sendf(ci->clientnum, 1, "ris", N_SERVMSG, teamkillmessages[ci->_xi.teamkillmessageindex++]);
     }
-    
+
     struct teamkillinfo
     {
         uint ip;
@@ -988,6 +1042,7 @@ namespace server
         _initfuncs();
         _initman();
         _enablefunc("nodamage", disabledamage>=0);
+        _enablefunc("votekick", votekick);
     }
 
     int numclients(int exclude = -1, bool nospec = true, bool noai = true, bool priv = false)
@@ -1009,7 +1064,7 @@ namespace server
         return false;
     }
 
-    const char *colorname(clientinfo *ci, char *name = NULL)
+    const char *colorname(clientinfo *ci, char *name)
     {
         if(!name) name = ci->name;
         if(name[0] && !duplicatename(ci, name) && ci->state.aitype == AI_NONE) return name;
@@ -1493,6 +1548,7 @@ namespace server
     void changegamespeed(int val, clientinfo *ci = NULL)
     {
         val = clamp(val, 10, 1000);
+        if(val!=100 && m_ctf) loopv(clients) clients[i]->_xi.flagrunvalid = false;
         if(gamespeed==val) return;
         gamespeed = val;
         sendf(-1, 1, "riii", N_GAMESPEED, gamespeed, ci ? ci->clientnum : -1);
@@ -1598,13 +1654,13 @@ namespace server
         if(authname && !val) return false;
         const char *name = "";
         int oldpriv = ci->privilege;
-        
+
         /* if authname exists and authdesc does not, this is gauth: do not hide privilege */
         bool washidden = (serverhidepriv > 0 &&
                             ci->privilege >= (serverhidepriv == 1 ? PRIV_ADMIN : PRIV_AUTH) &&
                             !(ci->privilege == PRIV_AUTH && ci->authname[0] && !ci->authdesc[0])) ||
                             ci->_xi.spy;
-        
+
         if(val)
         {
             /* Skip checking of passwords if password is already correct */
@@ -1615,7 +1671,7 @@ namespace server
             /* If incorrect password was given, register this as failed attempt */
             if(pass && pass[0] && maxpassfail && !hasadminpass && !hasmasterpass)
                 ci->_xi.failpass = max(ci->_xi.failpass + 1, ci->_xi.failpass);
-            
+
             int wantpriv = (maxpassfail && ci->_xi.failpass >= maxpassfail)
                 ? authpriv
                 : hasadminpass
@@ -1680,7 +1736,7 @@ namespace server
         } 
         else formatstring(msg)("%s %s %s%s", colorname(ci), val ? "claimed" : "relinquished", name,
             !(ishidden || (oldpriv && washidden)) ? "" : " \f1(hidden)");
-        
+
         logoutf("%s", msg);
 
         if((ci->privilege && !ishidden && ((oldpriv && washidden) || (!oldpriv && !washidden))) || (oldpriv && !washidden))
@@ -2297,7 +2353,11 @@ namespace server
         sendf(-1, 1, "risii", N_MAPCHANGE, smapname, gamemode, 1);
 
         clearteaminfo();
-        if(m_teammode) autoteam();
+        if(m_teammode)
+        {
+            if(!persistteams) autoteam();
+            else loopv(clients) if(clients[i]->team[0]) addteaminfo(clients[i]->team);
+        }
 
         if(m_capture) smode = &capturemode;
         else if(m_ctf) smode = &ctfmode;
@@ -3695,7 +3755,7 @@ namespace server
             clientinfo *cx = (clientinfo *)getclientinfo(cn);
             if(!cx)
             {
-                defformatstring(msg)("\f2[FAIL] Unknown client number \f0%i", cn);
+                defformatstring(msg)("\f3Unknown client number \f0%i", cn);
                 _notify(msg, ci);
                 return;
             }
@@ -3743,7 +3803,7 @@ namespace server
             clientinfo *cx = getinfo(cn);
             if(!cx)
             {
-                defformatstring(msg)("\f2[FAIL] Unknown client number \f0%i", cn);
+                defformatstring(msg)("\f3Unknown client number \f0%i", cn);
                 _notify(msg, ci);
                 return;
             }
@@ -3796,7 +3856,7 @@ namespace server
             clientinfo *cx = getinfo(cn);
             if(!cx)
             {
-                defformatstring(msg)("\f2[FAIL] Unknown client number \f0%i", cn);
+                defformatstring(msg)("\f3Unknown client number \f0%i", cn);
                 _notify(msg, ci);
                 return;
             }
@@ -3896,7 +3956,7 @@ namespace server
                 clientinfo *cx = (clientinfo *)getclientinfo(cn);
                 if(!cx)
                 {
-                    defformatstring(msg)("\f2[FAIL] Unknown client number \f0%i", cn);
+                    defformatstring(msg)("\f3Unknown client number \f0%i", cn);
                     _notify(msg, ci);
                     return;
                 }
@@ -4257,7 +4317,7 @@ namespace server
             {
                 if(ci)
                 {
-                    formatstring(msg)("\f2[FAIL] Unknown client number \"%s\"", cns[i]);
+                    formatstring(msg)("\f3Unknown client number \"%s\"", cns[i]);
                     sendf(ci->clientnum, 1, "ris", N_SERVMSG, msg);
                     return;
                 }
@@ -4408,7 +4468,7 @@ namespace server
             
             //if was gauther, unset authname, so it will be no longer identified as claimed as gauther
             if(cx->authname[0] && !cx->authdesc[0]) cx->authname[0] = '\0';
-            
+
             logoutf("%s", msg);
             
             bool hasmaster = false;
@@ -4480,8 +4540,7 @@ namespace server
         if(!ci) return;
         if(!m_teammode || !ci->_xi.tkiller)
         {
-            formatstring(msg)("\f4no teamkills to forgive");
-            sendf(ci->clientnum, 1, "ris", N_SERVMSG, msg);
+            sendf(ci->clientnum, 1, "ris", N_SERVMSG, "\f4no teamkills to forgive");
             return;
         }
         ci->_xi.tkiller->state.teamkills--;
@@ -4534,7 +4593,7 @@ namespace server
         clientinfo *cx = getinfo(cn);
         if(!cx)
         {
-            _notify("\f3[FAIL] No such cn", ci);
+            _notify("\f3Client with such client number not found", ci);
             return;
         }
         
@@ -4573,7 +4632,7 @@ namespace server
         int cn;
         if(!m_edit)
         {
-            if(ci) sendf(ci->clientnum, 1, "ris", N_SERVMSG, "\f2[FAIL] This is not edit mode");
+            if(ci) sendf(ci->clientnum, 1, "ris", N_SERVMSG, "\f3This is not edit mode");
             return;
         }
         cn = atoi(args);
@@ -4581,7 +4640,7 @@ namespace server
         {
             if(ci)
             {
-                defformatstring(msg)("\f2[FAIL] Unknown client number \"%s\"", args);
+                defformatstring(msg)("\f3Unknown client number \"%s\"", args);
                 sendf(ci->clientnum, 1, "ris", N_SERVMSG, msg);
             }
             return;
@@ -4592,7 +4651,7 @@ namespace server
         {
             if(ci)
             {
-                defformatstring(msg)("\f2[FAIL] Unknown client number \"%s\"", args);
+                defformatstring(msg)("\f3Unknown client number \"%s\"", args);
                 sendf(ci->clientnum, 1, "ris", N_SERVMSG, msg);
             }
             return;
@@ -4610,7 +4669,7 @@ namespace server
         int cn = atoi(argv[0]);
         if(!cn && strcmp(argv[0], "0"))
         {
-            if(ci) sendf(ci->clientnum, 1, "ris", "\f2[FAIL] Such client number not found");
+            if(ci) sendf(ci->clientnum, 1, "ris", "\f3Such client number not found");
             else logoutf("_ban:%s isnt cn", argv[0]);
             return;
         }
@@ -4618,7 +4677,7 @@ namespace server
         uint ip = getclientip(cn);
         if(!cx || !ip)
         {
-            if(ci) sendf(ci->clientnum, 1, "ris", "\f2[FAIL] Such client number not found");
+            if(ci) sendf(ci->clientnum, 1, "ris", "\f3Such client number not found");
             else logoutf("_ban:no such cn");
             return;
         }
@@ -4647,7 +4706,7 @@ namespace server
                 case 'h': case 'H': case 0: m = 60*60000; break;
                 case 'd': case 'D': m = 24*60*60000; break;
                 default:
-                    if(ci) sendf(ci->clientnum, 1, "ris", "\f2[FAIL] Unknown time specification");
+                    if(ci) sendf(ci->clientnum, 1, "ris", "\f3Unknown time specification");
                     else logoutf("_ban:unknown time %s", argv[1]);
                     return;
             }
@@ -4658,7 +4717,7 @@ namespace server
                 t = atoi(argv[1]);
                 if(!t)
                 {
-                    if(ci) sendf(ci->clientnum, 1, "ris", "\f2[FAIL] Unknown time specification");
+                    if(ci) sendf(ci->clientnum, 1, "ris", "\f3Unknown time specification");
                     else logoutf("_ban:unknown time %s", argv[1]);
                     return;
                 }
@@ -4769,8 +4828,6 @@ namespace server
         return true;
     }
     
-    VARF(votekick, 0, 1, 1, { _enablefunc("votekick", votekick); });
-    
     void _votekickfunc(const char *cmd, const char *args, clientinfo *ci)
     {
         int cn;
@@ -4785,7 +4842,7 @@ namespace server
             _man("usage", cmd, ci);
             return;
         }
-        if(!_votekick(ci, cn)) sendf(ci->clientnum, 1, "ris", N_SERVMSG, "\f2[FAIL] Votekick failed");
+        if(!_votekick(ci, cn)) sendf(ci->clientnum, 1, "ris", N_SERVMSG, "\f3[FAIL] Votekick failed");
     }
     
     void _stats(const char *cmd, const char *args, clientinfo *ci)
@@ -4823,7 +4880,7 @@ namespace server
             if(cx) cns.add(cx);
             else
             {
-                formatstring(msg)("\f2[FAIL] Unknown client number \f0%i", cn);
+                formatstring(msg)("\f3Unknown client number \f0%i", cn);
                 _notify(msg, ci);
                 return;
             }
@@ -4891,7 +4948,7 @@ namespace server
         clientinfo *cx = (clientinfo *)getclientinfo(cn);
         if(!cx)
         {
-            formatstring(msg)("\f2[FAIL] Unknown client number \f0%i", cn);
+            formatstring(msg)("\f3Unknown client number \f0%i", cn);
             _notify(msg, ci);
             return;
         }
@@ -4911,6 +4968,13 @@ namespace server
         
         sendf(ci ? ci->clientnum : -1, 1, "ris", N_SERVMSG, msg);
         
+        if(serveradmin[0])
+        {
+            copystring(msg, "\f5[INFO] \f7Administrator(s): \f0");
+            concatstring(msg, serveradmin);
+            sendf(ci ? ci->clientnum : -1, 1, "ris", N_SERVMSG, msg);
+        }
+
         copystring(msg, "\f5[INFO] \f7Architecture: "
         /* Firstly determine OS */
 #if !(defined(_WIN32) || defined(WIN32) || defined(WIN64) || defined(_WIN64))
@@ -5068,7 +5132,7 @@ namespace server
             }
         }
     }
-    
+
     static void _addhiddenfunc(const char *s, int priv, void (*_func)(const char *cmd, const char *args, clientinfo *ci))
     {
         char buf[MAXTRANS];
@@ -5118,9 +5182,9 @@ namespace server
     void _nocommand(const char *cmd, clientinfo *ci)
     {
         string msg;
-        
+
         if(!ci || !cmd || !cmd[0]) return;
-        
+
         if(commandchars[0]) formatstring(msg)("\f3Unknown command \"\f0%s\f3\". For a list of avaiable commands type \"\f0%chelp\f3\"", cmd, commandchars[0]);
         else formatstring(msg)("\f3Unknown command \"\f0%s\f3\". For a list of avaiable commands type \"\f3/servcmd help\f3\"", cmd);
         sendf(ci->ownernum, 1, "ris", N_SERVMSG, msg);
@@ -5130,7 +5194,7 @@ namespace server
     {
         return ci ? ci->privilege : PRIV_ROOT;
     }
-        
+
     void _servcmd(const char *cmd, clientinfo *ci, char cmdchar = 0)
     {
         char *argv[2];
@@ -5683,6 +5747,16 @@ namespace server
             case N_SWITCHTEAM:
             {
                 getstring(text, p);
+
+                if(totalmillis - ci->_xi.lastmsg >= 200) ci->_xi.msgnum = 0;
+                else ci->_xi.msgnum = max(ci->_xi.msgnum + 1, ci->_xi.msgnum);
+                ci->_xi.lastmsg = totalmillis;
+                if(ci->_xi.msgnum >= 80)
+                {
+                    if(ci->_xi.msgnum < 160) sendf(sender, 1, "ris", N_SERVMSG, "\f3[ANTIFLOOD] N_SWITCHTEAM was blocked");
+                    break;
+                }
+
                 filtertext(text, text, false, MAXTEAMLEN);
                 if(m_teammode && text[0] && strcmp(ci->team, text) && (!smode || smode->canchangeteam(ci, ci->team, text)) && addteaminfo(text))
                 {

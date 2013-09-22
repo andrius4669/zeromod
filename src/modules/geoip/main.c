@@ -29,6 +29,7 @@ void (*delhook)(char *, int (*hookfunc)(struct hookparam *));
 GeoIP *gi  = 0;
 GeoIP *gic = 0;
 
+int needcity = 1;
 int needregion = 0;
 
 int _argsep(char *str, int c, char **argv)
@@ -70,7 +71,7 @@ int on_connect(struct hookparam *hp)
     unsigned int ip = *(unsigned int *)hp->args[2];
     
     int searchcountry = gi ? 1 : 0;
-    int searchcity = gic ? 1 : 0;
+    int searchcity = gic && needcity ? 1 : 0;
     int searchregion = gic && needregion ? 1 : 0;
     const char *country = 0, *city = 0, *region = 0;
     GeoIPRecord *gir = 0;
@@ -168,6 +169,10 @@ char *z_init(void *getext, void *setext, char *args)
             needregion = 1;
             break;
         
+        case 'p':
+            needcity = 0;
+            break;
+        
         default:
             return "Unknown switch";
     }
@@ -191,8 +196,8 @@ char *z_init(void *getext, void *setext, char *args)
         else if(debug) debug("Failed to load GeoIP database (GeoIP.dat)");
     }
     
-    if(!gic) gic = GeoIP_open(cdbfile, !nomem ? GEOIP_INDEX_CACHE : GEOIP_STANDARD);
-    if(!gic)
+    if(!gic && (needcity || needregion)) gic = GeoIP_open(cdbfile, !nomem ? GEOIP_INDEX_CACHE : GEOIP_STANDARD);
+    if(!gic && (needcity || needregion))
     {
         if(cdbfileset)
         {

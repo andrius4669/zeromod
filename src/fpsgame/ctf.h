@@ -294,6 +294,8 @@ struct ctfclientmode : clientmode
             {
                 ivec o(vec(ci->state.o).mul(DMF));
                 sendf(-1, 1, "ri7", N_DROPFLAG, ci->clientnum, i, ++f.version, o.x, o.y, o.z);
+                ci->_xi.lasttakeflag = 0;
+                ci->_xi.flagrunvalid = false;
                 dropflag(i, o.tovec().div(DMF), lastmillis, dropper ? dropper->clientnum : ci->clientnum, dropper && dropper!=ci);
             }
         }
@@ -345,6 +347,11 @@ struct ctfclientmode : clientmode
         int team = ctfteamflag(ci->team), score = addscore(team, 1);
         if(m_hold) spawnflag(goal);
         sendf(-1, 1, "rii9", N_SCOREFLAG, ci->clientnum, relay, relay >= 0 ? ++flags[relay].version : -1, goal, ++flags[goal].version, flags[goal].spawnindex, team, score, ci->state.flags);
+        if(m_ctf && !m_hold && !m_protect)
+        {
+            int timeused = gamemillis - ci->_xi.lasttakeflag;
+            if(ci->_xi.flagrunvalid && ci->_xi.lasttakeflag && timeused <= 90*1000) _doflagrun(ci, timeused);
+        }
         if(score >= FLAGLIMIT) startintermission();
     }
 
@@ -359,6 +366,12 @@ struct ctfclientmode : clientmode
             loopvj(flags) if(flags[j].owner==ci->clientnum) return;
             ownflag(i, ci->clientnum, lastmillis);
             sendf(-1, 1, "ri4", N_TAKEFLAG, ci->clientnum, i, ++f.version);
+
+            if(!f.droptime)
+            {
+                ci->_xi.lasttakeflag = gamemillis ? gamemillis : 1;
+                ci->_xi.flagrunvalid = gamespeed == 100;
+            }
         }
         else if(m_protect)
         {
