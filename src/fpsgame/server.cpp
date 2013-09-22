@@ -1272,18 +1272,16 @@ namespace server
                 {
                     copystring(goodteam, clients[i]->team);
                     copystring(clients[i]->team, teamnames[0], MAXTEAMLEN+1);
-                    sendf(-1, 1, "riisi", N_SETTEAM, clients[i]->clientnum, teamnames[0], -1);
                 }
                 else if(!strcmp(clients[i]->team, goodteam))
                 {
                     copystring(clients[i]->team, teamnames[0], MAXTEAMLEN+1);
-                    sendf(-1, 1, "riisi", N_SETTEAM, clients[i]->clientnum, teamnames[0], -1);
                 }
                 else
                 {
                     copystring(clients[i]->team, teamnames[1], MAXTEAMLEN+1);
-                    sendf(-1, 1, "riisi", N_SETTEAM, clients[i]->clientnum, teamnames[1], -1);
                 }
+                sendf(-1, 1, "riisi", N_SETTEAM, clients[i]->clientnum, clients[i]->team, -1);
             }
         }
         loopi(2) addteaminfo(teamnames[i]);
