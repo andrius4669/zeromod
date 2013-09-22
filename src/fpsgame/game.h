@@ -845,4 +845,7 @@ namespace server
     extern int _getivars(const char *name);
 }
 
+//zeromod
+extern volatile int quitserver;
+
 #endif

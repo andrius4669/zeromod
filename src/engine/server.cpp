@@ -1031,6 +1031,7 @@ void rundedicatedserver()
     
     //quit server
     logoutf("\nserver is shutting down...");
+    server::serverclose();
     //notify clients we stopped working
     loopv(clients) if(clients[i]->type == ST_TCPIP)
     {

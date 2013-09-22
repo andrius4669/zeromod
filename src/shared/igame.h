@@ -121,5 +121,8 @@ namespace server
     extern void masterdisconnected();
     extern bool ispaused();
     extern int scaletime(int t);
+
+    //zeromod
+    extern void serverclose();
 }
 
