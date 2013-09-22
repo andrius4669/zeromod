@@ -578,7 +578,7 @@ namespace server
         if(serverflagruns)
         {
             _flagrun *fr = 0;
-            loopv(_flagruns) if(_flagruns[i].gamemode == gamemode && !strcmp(_flagruns[i].name, smapname))
+            loopv(_flagruns) if(_flagruns[i].gamemode == gamemode && !strcmp(_flagruns[i].map, smapname))
             { fr = &_flagruns[i]; break; }
             if(!fr)
             {
