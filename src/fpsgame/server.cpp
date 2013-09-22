@@ -570,6 +570,7 @@ namespace server
 
     VAR(serverflagruns, 0, 0, 1);
 
+    int newflagrun = 0;
     void _doflagrun(clientinfo *ci, int timeused)
     {
         ci->_xi.lasttakeflag = 0;
@@ -596,6 +597,7 @@ namespace server
             isbest = isbest || timeused <= fr->timeused;
             if(isbest)
             {
+                newflagrun = 1;
                 if(strcmp(ci->name, fr->name))
                 {
                     DELETEA(fr->name);
@@ -639,7 +641,7 @@ namespace server
         }
         fr->timeused = timeused;
     }
-    ICOMMAND(fragrun, "isis", (int *i, const char *s, int *j, const char *z), addflagrun(*i, s, *j, z));
+    ICOMMAND(flagrun, "isis", (int *i, const char *s, int *j, const char *z), addflagrun(*i, s, *j, z));
 
     struct maprotation
     {
@@ -1084,9 +1086,8 @@ namespace server
         if(serverflagruns) execfile("flagruns.cfg", false);
     }
 
-    void serverclose()
+    void _storeflagruns()
     {
-        //store flagruns
         if(serverflagruns)
         {
             stream *f = openutf8file(path("flagruns.cfg", true), "w");
@@ -1099,6 +1100,12 @@ namespace server
                 delete f;
             }
         }
+    }
+
+    void serverclose()
+    {
+        //store flagruns
+        _storeflagruns();
     }
 
     int numclients(int exclude = -1, bool nospec = true, bool noai = true, bool priv = false)
@@ -3074,6 +3081,7 @@ namespace server
         bannedips.shrink(0);
         aiman::clearai();
         persist = persistteams;
+        if(newflagrun) _storeflagruns();
     }
 #if 0
     void localconnect(int n)
