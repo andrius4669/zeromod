@@ -335,6 +335,8 @@ namespace server
             warned = false;
             gameclip = false;
             _xi.tkiller = 0;
+            _xi.lasttakeflag = 0;
+            _xi.flagrunvalid = false;
 			if(_xi.mute && _xi.mute < 2) _xi.mute = 0;
 			if(_xi.editmute && _xi.editmute < 2) _xi.editmute = 0;
 			if(_xi.forcedspectator && _xi.forcedspectator < 2) _xi.forcedspectator = 0;
@@ -589,7 +591,7 @@ namespace server
                 _flagruns[lastfr].timeused = INT_MAX;
                 fr = &_flagruns[lastfr];
             }
-            bool isbest = timeused <= fr->timeused;
+            bool isbest = (timeused <= fr->timeused) ? true : false;
             if(isbest)
             {
                 DELETEA(fr->name);
@@ -1255,6 +1257,36 @@ namespace server
                 sendf(-1, 1, "riisi", N_SETTEAM, ci->clientnum, teamnames[i], -1);
             }
         }
+    }
+
+    void persistautoteam()
+    {
+        static const char * const teamnames[2] = {"good", "evil"};
+        string goodteam;
+        goodteam[0] = 0;
+        loopv(clients)
+        {
+            if(strcmp(clients[i]->team, teamnames[0]) && strcmp(clients[i]->team, teamnames[1]))
+            {
+                if(!goodteam[0])
+                {
+                    copystring(goodteam, clients[i]->team);
+                    copystring(clients[i]->team, teamnames[0], MAXTEAMLEN+1);
+                    sendf(-1, 1, "riisi", N_SETTEAM, clients[i]->clientnum, teamnames[0], -1);
+                }
+                else if(!strcmp(clients[i]->team, goodteam))
+                {
+                    copystring(clients[i]->team, teamnames[0], MAXTEAMLEN+1);
+                    sendf(-1, 1, "riisi", N_SETTEAM, clients[i]->clientnum, teamnames[0], -1);
+                }
+                else
+                {
+                    copystring(clients[i]->team, teamnames[1], MAXTEAMLEN+1);
+                    sendf(-1, 1, "riisi", N_SETTEAM, clients[i]->clientnum, teamnames[1], -1);
+                }
+            }
+        }
+        loopi(2) addteaminfo(teamnames[i]);
     }
 
     struct teamrank
@@ -2356,6 +2388,7 @@ namespace server
         if(m_teammode)
         {
             if(!persistteams) autoteam();
+            else if(m_ctf) persistautoteam();
             else loopv(clients) if(clients[i]->team[0]) addteaminfo(clients[i]->team);
         }
 
