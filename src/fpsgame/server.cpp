@@ -3081,7 +3081,7 @@ namespace server
         bannedips.shrink(0);
         aiman::clearai();
         persist = persistteams;
-        if(newflagrun) _storeflagruns();
+        if(newflagrun) { _storeflagruns(); newflagrun = 0; }
     }
 #if 0
     void localconnect(int n)
