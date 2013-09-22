@@ -580,22 +580,27 @@ namespace server
             _flagrun *fr = 0;
             loopv(_flagruns) if(_flagruns[i].gamemode == gamemode && !strcmp(_flagruns[i].map, smapname))
             { fr = &_flagruns[i]; break; }
+            bool isbest = false;
             if(!fr)
             {
+                isbest = true;
                 int lastfr = _flagruns.length();
                 if(lastfr >= 1024) return;
                 _flagruns.add();
                 _flagruns[lastfr].map = newstring(smapname);
                 _flagruns[lastfr].gamemode = gamemode;
-                _flagruns[lastfr].name = 0;
-                _flagruns[lastfr].timeused = INT_MAX;
+                _flagruns[lastfr].name = newstring(ci->name);
+                _flagruns[lastfr].timeused = timeused;
                 fr = &_flagruns[lastfr];
             }
-            bool isbest = (timeused <= fr->timeused) ? true : false;
+            isbest = isbest || timeused <= fr->timeused;
             if(isbest)
             {
-                DELETEA(fr->name);
-                fr->name = newstring(ci->name ? ci->name : "unnamed");
+                if(strcmp(ci->name, fr->name))
+                {
+                    DELETEA(fr->name);
+                    fr->name = newstring(ci->name);
+                }
                 fr->timeused = timeused;
             }
             string msg;
