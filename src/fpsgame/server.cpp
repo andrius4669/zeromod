@@ -570,7 +570,7 @@ namespace server
 
     VAR(serverflagruns, 0, 0, 1);
 
-    int newflagrun = 0;
+    int _newflagrun = 0;
     void _doflagrun(clientinfo *ci, int timeused)
     {
         ci->_xi.lasttakeflag = 0;
@@ -597,7 +597,7 @@ namespace server
             isbest = isbest || timeused <= fr->timeused;
             if(isbest)
             {
-                newflagrun = 1;
+                _newflagrun = 1;
                 if(strcmp(ci->name, fr->name))
                 {
                     DELETEA(fr->name);
@@ -866,6 +866,8 @@ namespace server
 		}
 	});
     SVAR(servermotd, "");
+
+    VAR(autolockmaster, 0, 0, MAXCLIENTS);
 
     struct teamkillkick
     {
@@ -3081,7 +3083,7 @@ namespace server
         bannedips.shrink(0);
         aiman::clearai();
         persist = persistteams;
-        if(newflagrun) { _storeflagruns(); newflagrun = 0; }
+        if(_newflagrun) { _storeflagruns(); _newflagrun = 0; }
     }
 #if 0
     void localconnect(int n)
@@ -3138,6 +3140,8 @@ namespace server
             //if(ci->local) checkpausegame();
         }
         else connects.removeobj(ci);
+
+        if(publicserver != 1 && autolockmaster && numclients(-1, false) < autolockmaster) mastermask |= MM_AUTOAPPROVE;
     }
 
     int reserveclients() { return 8; }
@@ -3491,6 +3495,8 @@ namespace server
         }
         
         if(servermotd[0]) sendf(ci->clientnum, 1, "ris", N_SERVMSG, servermotd);
+
+        if(publicserver != 1 && autolockmaster && numclients(-1, false) >= autolockmaster) mastermask &= ~MM_AUTOAPPROVE;
     }
 
     
@@ -5200,9 +5206,10 @@ namespace server
     
     void _persistfunc(const char *cmd, const char *args, clientinfo *ci)
     {
-        if(!args || !args[0]) return;
-        persist = atoi(args) ? 1 : 0;
-        sendservmsgf("persistent teams %sabled", persist ? "\f0en" : "\f4dis");
+        string msg;
+        if(args && args[0]) persist = atoi(args) ? 1 : 0;
+        formatstring(msg)("persistent teams %sabled", persist ? "\f0en" : "\f4dis");
+        sendf((!args || !args[0]) && ci ? ci->clientnum : -1, 1, "ris", N_SERVMSG, msg);
     }
 
     void _haltfunc(const char *cmd, const char *args, clientinfo *ci)

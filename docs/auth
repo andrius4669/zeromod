@@ -44,8 +44,8 @@ How to configure server:
         ->  /dauthkick domain cn reason;
         ->  publickey: public key got from genauthkey
         ->  privilege: user privilege, may be one of these:
-        ->  c m a r
-        ->  c = Claim master (same as simple master claim) [NONSTANDARD]
+        ->  n m a r
+        ->  n = no privilege    [NONSTANDARD]
         ->  m = authenticated Master
         ->  a = Administrator
         ->  r = Root            [NONSTANDARD]
