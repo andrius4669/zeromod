@@ -2818,7 +2818,7 @@ namespace server
 
         if(gs.ammo[gun] <= 0)
         {
-            if(!m_edit) _cheater(ci, "gunhack::noammo", AC_GUNHACK, 5);
+            if(m_insta) _cheater(ci, "gunhack::noammo", AC_GUNHACK, 10);
             return;
         }
 
