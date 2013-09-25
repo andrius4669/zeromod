@@ -1,0 +1,16 @@
+This is module which provides geolocation support for zeromod.
+To compile this module on unix-like systems type "./compile".
+This module depends on libGeoIP.so, GeoIP.h and GeoIPCity.h.
+This module by default reads GeoIP.dat and GeoLiteCity.dat.
+Avaiable options:
+f - next option will be file name of country geoip database
+c - next option will be file name of city and region geoip database
+n - do not cache databases contents (may eat less memory, but be slower)
+r - show information about client region (by default only city and country are shown)
+p - do not show information about cities (better for privacy)
+
+example 1 (in server-init.cfg):
+zload geoip p
+
+example 2 (in game):
+#load geoip f GeoIP.dat c GeoIPCity.dat r

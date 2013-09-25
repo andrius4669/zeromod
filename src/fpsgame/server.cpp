@@ -22,14 +22,14 @@ namespace server
     {
         void *args[16];
     } __attribute__((packed));
-    
+
     _hookparam _hp;
-    
+
     int _exechook(const char *name);
     static void _enablefunc(const char *s, bool val);
     void _initfuncs();
     void _initman();
-    
+
     struct server_entity            // server side version of "entity" type
     {
         int type;
@@ -239,7 +239,7 @@ namespace server
         int lasttakeflag;
         bool flagrunvalid;
     };
-    
+
     struct clientinfo
     {
         int clientnum, ownernum, connectmillis, sessionid, overflow;
@@ -305,15 +305,15 @@ namespace server
         void setexceeded()
         {
             if(state.state==CS_ALIVE && !exceeded && !checkpushed(gamemillis, calcpushrange())) exceeded = gamemillis;
-            scheduleexceeded(); 
+            scheduleexceeded();
         }
-            
+
         void setpushed()
         {
             pushed = max(pushed, gamemillis);
             if(exceeded && checkpushed(exceeded, calcpushrange())) exceeded = 0;
         }
-        
+
         bool checkexceeded()
         {
             return state.state==CS_ALIVE && exceeded && gamemillis > exceeded + calcpushrange();
@@ -435,7 +435,7 @@ namespace server
     const char *colorname(clientinfo *ci, char *name = NULL);
     int _getpriv(clientinfo *ci);
 	void _forcespectator(clientinfo *ci, int spec);
-    
+
     string smapname = "";
     int interm = 0;
     enet_uint32 lastsend = 0;
@@ -474,7 +474,7 @@ namespace server
         int n, reason;
     };
     vector<_scheduled_disconnect> _scheduled_disconnects;
-    
+
     void _schedule_disconnect(int n, int reason)
     {
         loopv(_scheduled_disconnects) if(_scheduled_disconnects[i].n == n) return;
@@ -483,7 +483,7 @@ namespace server
          d.reason = reason;
          _scheduled_disconnects.add(d);
     }
-    
+
     VAR(anticheat, 0, 3, 4);
 /*
  *  0=disable, 1=warn on cheat,
@@ -491,30 +491,30 @@ namespace server
  *  4=warn&disc on all cheats (not recomended)
  */
     VAR(anticheatmessages, 0, 2, 2);    // 0=everyone, 1=masters, 2=admins
-    
+
     void _cheater(clientinfo *ci, const char *s, int type, int n)
     {
         clientinfo *owner;
         string msg;
-        
+
         if(!ci || anticheat <= 0) return;
-        
+
         if(ci->state.aitype == AI_NONE) owner = ci;
         else
         {
             owner = (clientinfo *)getclientinfo(ci->ownernum);
             if(!owner) return;
         }
-        
+
         if(type < 0 || type >= AC_MAX) return;
-        
+
         if(!s) s = cheats[type].name;
-        
+
         if(n > 0)
         {
             owner->_xi.acinfo[type] = char(min(int(owner->_xi.acinfo[type]) + min(n, 100), 100));
             n = int(owner->_xi.acinfo[type]);
-            
+
             if(ci->state.aitype == AI_NONE)
             {
                 formatstring(msg)("\f3[AC] \f2Cheater: \f7%s \f5(%i) \f2Type: \f7%s \f1[\f0%03i\f1]",
@@ -540,9 +540,9 @@ namespace server
                     ci->name, ci->clientnum, owner->name, owner->clientnum, s);
             }
         }
-        
+
         logoutf("%s", msg);
-        
+
         if(anticheatmessages)
         {
             loopv(clients)
@@ -552,9 +552,9 @@ namespace server
             }
         }
         else sendf(-1, 1, "ris", N_SERVMSG, msg);
-                
+
         if(anticheat <= 1 || ci->privilege >= PRIV_ADMIN || owner->privilege >= PRIV_ADMIN) return;
-        
+
         if(n >= 100 || (anticheat >= 4 && n == 0))
             _schedule_disconnect(ci->ownernum, DISC_MSGERR);
     }
@@ -648,7 +648,7 @@ namespace server
         static int exclude;
         int modes;
         string map;
-        
+
         int calcmodemask() const { return modes&(1<<NUMGAMEMODES) ? modes & ~exclude : modes; }
         bool hasmode(int mode, int offset = STARTGAMEMODE) const { return (calcmodemask() & (1 << (mode-offset))) != 0; }
 
@@ -731,7 +731,7 @@ namespace server
             for(; *h && *n; h++)
             {
                 if(*h == *n) n++;
-                else if(*h != ' ') break; 
+                else if(*h != ' ') break;
             }
             if(!*n) return true;
             if(*n == '.') return !*h;
@@ -776,7 +776,7 @@ namespace server
         }
         return modemask;
     }
-         
+
     bool addmaprotation(int modemask, const char *map)
     {
         if(!map[0]) loopk(NUMGAMEMODES) if(modemask&(1<<k) && !m_check(k+STARTGAMEMODE, M_EDIT)) modemask &= ~(1<<k);
@@ -787,7 +787,7 @@ namespace server
         copystring(rot.map, map);
         return true;
     }
-        
+
     void addmaprotations(tagval *args, int numargs)
     {
         vector<char *> modes, maps;
@@ -808,7 +808,7 @@ namespace server
             rot.map[0] = '\0';
         }
     }
-    
+
     COMMAND(maprotationreset, "");
     COMMANDN(maprotation, addmaprotations, "ss2V");
 
@@ -836,7 +836,7 @@ namespace server
     VAR(clearbots, 0, 1, 1);                        //decides if server clears bots upon changing map
     VAR(servergamespeed, 10, 100, 1000);            //default gamespeed
     FVAR(servergamelimit, 1.0, 10.0, 1440.0);       //max is 24 hours
-    VAR(serverovertime, 0, 0, 1);                   //decides if server 
+    VAR(serverovertime, 0, 0, 1);                   //decides if server
     VAR(servercheckgbans, 0, 1, 2);                 //decides if server checks gbans (0=no;1=yes;2=checkifnoadminexists)
     VAR(serverhideip, 0, 0, 1);                     //protects users privacy; disables showing ip in cube server listener
     VAR(beststats, 0, 1, 1);                        //show best stats
@@ -852,7 +852,7 @@ namespace server
     SVAR(serveradmin, "");
     VAR(persistteams, 0, 0, 1);
     int persist = 0;
-    
+
     SVAR(serverdesc, "");
     SVAR(serverpass, "");
     SVAR(adminpass, "");
@@ -897,7 +897,7 @@ namespace server
         teamkillkick &kick = teamkillkicks.add();
         kick.modes = genmodemask(modes);
         kick.limit = *limit;
-        kick.ban = *ban > 0 ? *ban*60000 : (*ban < 0 ? 0 : 30*60000); 
+        kick.ban = *ban > 0 ? *ban*60000 : (*ban < 0 ? 0 : 30*60000);
         modes.deletearrays();
     }
 
@@ -908,14 +908,14 @@ namespace server
     {
         char *message;
         int modes;
-        
+
         bool match(int mode) const
         {
             return (modes&(1<<(mode-STARTGAMEMODE)))!=0;
         }
     };
     vector<teamkillmessage> teamkillmessages;
-    
+
     void addteamkillmessage(char *modestr, char *message)
     {
         vector<char *> modes;
@@ -927,14 +927,14 @@ namespace server
         modes.deletearrays();
     }
     ICOMMAND(teamkillmessage, "ss", (char *a, char *b), addteamkillmessage(a, b));
-    
+
     void teamkillmessagereset()
     {
         loopv(teamkillmessages) DELETEA(teamkillmessages[i].message);
         teamkillmessages.shrink(0);
     }
     COMMAND(teamkillmessagereset, "");
-    
+
     void sendteamkillmessage(clientinfo *ci)
     {
         if(teamkillmessages.empty() || !ci || ci->state.aitype != AI_NONE) return;
@@ -965,8 +965,8 @@ namespace server
         if(!m_timed || actor->state.aitype != AI_NONE || actor->privilege || (victim && victim->state.aitype != AI_NONE)) return;
         shouldcheckteamkills = true;
         uint ip = getclientip(actor->clientnum);
-        loopv(teamkills) if(teamkills[i].ip == ip) 
-        { 
+        loopv(teamkills) if(teamkills[i].ip == ip)
+        {
             teamkills[i].teamkills += n;
             return;
         }
@@ -1113,7 +1113,7 @@ namespace server
     int numclients(int exclude = -1, bool nospec = true, bool noai = true, bool priv = false)
     {
         int n = 0;
-        loopv(clients) 
+        loopv(clients)
         {
             clientinfo *ci = clients[i];
             if(ci->_xi.spy) continue;
@@ -1219,7 +1219,7 @@ namespace server
                 return false;
         }
     }
- 
+
     bool pickup(int i, int sender)         // server side item pickup, acknowledge first client that gets it
     {
         clientinfo *ci = getinfo(sender);
@@ -1398,7 +1398,7 @@ namespace server
         loopi(n) delete[] demos[i].data;
         demos.remove(0, n);
     }
- 
+
     void adddemo()
     {
         if(!demotmp) return;
@@ -1415,7 +1415,7 @@ namespace server
         demotmp->read(d.data, len);
         DELETEP(demotmp);
     }
-        
+
     void enddemorecord()
     {
         if(!demorecord) return;
@@ -1660,7 +1660,7 @@ namespace server
     {
         char *name;
         char *desc;
-        
+
         userkey() : name(NULL), desc(NULL) {}
         userkey(char *name, char *desc) : name(name), desc(desc) {}
     };
@@ -1739,9 +1739,9 @@ namespace server
         }
         putint(p, -1);
     }
-    
+
     VAR(maxpassfail, 0, 16, 4096);  //maximum password attempts
-    
+
     bool setmaster(clientinfo *ci, bool val, const char *pass = "", const char *authname = NULL, const char *authdesc = NULL, int authpriv = PRIV_MASTER, bool force = false, bool trial = false)
     {
         if(authname && !val) return false;
@@ -1772,14 +1772,14 @@ namespace server
                     : hasmasterpass
                         ? PRIV_MASTER
                         : authpriv;
-            
+
             if(ci->privilege)
             {
                 if(wantpriv <= ci->privilege) return true;
             }
             else if(wantpriv <= PRIV_MASTER && !force && !hasmasterpass)
             {
-                if(ci->state.state==CS_SPECTATOR) 
+                if(ci->state.state==CS_SPECTATOR)
                 {
                     sendf(ci->clientnum, 1, "ris", N_SERVMSG, "Spectators may not claim master.");
                     return false;
@@ -1813,12 +1813,12 @@ namespace server
             mastermode = defaultmastermode;
             if(mastermode < MM_PRIVATE) allowedips.shrink(0);
         }
-        
+
         bool ishidden = ci->_xi.spy ||
                         (serverhidepriv > 0 &&
                         ci->privilege >= (serverhidepriv == 1 ? PRIV_ADMIN : PRIV_AUTH) &&
                         !(ci->privilege == PRIV_AUTH && ci->authname[0] && !ci->authdesc[0]));
-        
+
         string msg;
         if(val && authname)
         {
@@ -1826,7 +1826,7 @@ namespace server
                 colorname(ci), name, authname, authdesc, !(ishidden || (oldpriv && washidden)) ? "" : " \f1(hidden)");
             else formatstring(msg)("%s claimed %s as '\fs\f5%s\fr'%s",
                 colorname(ci), name, authname, !(ishidden || (oldpriv && washidden)) ? "" : " \f1(hidden)");
-        } 
+        }
         else formatstring(msg)("%s %s %s%s", colorname(ci), val ? "claimed" : "relinquished", name,
             !(ishidden || (oldpriv && washidden)) ? "" : " \f1(hidden)");
 
@@ -1853,7 +1853,7 @@ namespace server
             _putmaster(p);
             sendpacket(-1, 1, p.finalize(), !(ishidden || (oldpriv && washidden)) ? -1 : ci->ownernum);
         }
-        
+
         if(ishidden || (oldpriv && washidden))
         {
             packetbuf q(MAXTRANS, ENET_PACKET_FLAG_RELIABLE);
@@ -1862,7 +1862,7 @@ namespace server
             _putmaster(q);
             sendpacket(ci->ownernum, 1, q.finalize());
         }
-        
+
         checkpausegame();
         return true;
     }
@@ -1901,7 +1901,7 @@ namespace server
                 }
                 sendf(-1, 1, "ris", N_SERVMSG, msg);
                 logoutf("%s", msg);
-                
+
                 uint ip = getclientip(victim);
                 addban(ip, 4*60*60000);
                 kickclients(ip, ci);
@@ -1946,7 +1946,7 @@ namespace server
         savedscore *sc = findscore(ci, true);
         if(sc) sc->save(ci->state);
     }
-    
+
     static struct msgfilter
     {
         uchar msgmask[NUMMSG];
@@ -2314,7 +2314,7 @@ namespace server
                 if(t.frags) { sendstring(t.team, p); putint(p, t.frags); }
             );
             sendstring("", p);
-        } 
+        }
         if(ci)
         {
             putint(p, N_SETTEAM);
@@ -2416,9 +2416,9 @@ namespace server
         }
         notgotitems = false;
     }
-    
-    
-    
+
+
+
     void changemap(const char *s, int mode)
     {
         stopdemo();
@@ -2480,7 +2480,7 @@ namespace server
         }
 
         if(smode) smode->setup();
-        
+
         _nodamage = disabledamage > 0 ? disabledamage : 0;
     }
 
@@ -2491,7 +2491,7 @@ namespace server
             changemap("", 1);
             return;
         }
-        if(next) 
+        if(next)
         {
             curmaprotation = findmaprotation(gamemode, smapname);
             if(curmaprotation >= 0) nextmaprotation();
@@ -2500,7 +2500,7 @@ namespace server
         maprotation &rot = maprotations[curmaprotation];
         changemap(rot.map, rot.findmode(gamemode));
     }
-    
+
     struct votecount
     {
         char *map;
@@ -2547,7 +2547,7 @@ namespace server
     void forcemap(const char *map, int mode)
     {
         stopdemo();
-        if(!map[0] && !m_check(mode, M_EDIT)) 
+        if(!map[0] && !m_check(mode, M_EDIT))
         {
             int idx = findmaprotation(mode, smapname);
             if(idx < 0 && smapname[0]) idx = findmaprotation(mode, "");
@@ -2564,14 +2564,14 @@ namespace server
         clientinfo *ci = getinfo(sender);
         if(!ci || (ci->state.state==CS_SPECTATOR && !ci->privilege) || !m_mp(reqmode)) return;
         if(!m_valid(reqmode)) return;
-        if(!map[0] && !m_check(reqmode, M_EDIT)) 
+        if(!map[0] && !m_check(reqmode, M_EDIT))
         {
             int idx = findmaprotation(reqmode, smapname);
             if(idx < 0 && smapname[0]) idx = findmaprotation(reqmode, "");
             if(idx < 0) return;
             map = maprotations[idx].map;
         }
-        if(lockmaprotation && ci->privilege < (lockmaprotation > 1 ? PRIV_ADMIN : PRIV_MASTER) && findmaprotation(reqmode, map) < 0) 
+        if(lockmaprotation && ci->privilege < (lockmaprotation > 1 ? PRIV_ADMIN : PRIV_MASTER) && findmaprotation(reqmode, map) < 0)
         {
             sendf(sender, 1, "ris", N_SERVMSG, "This server has locked the map rotation.");
             return;
@@ -2624,7 +2624,7 @@ namespace server
         defformatstring(buf)(" \f1(\f0%i\f1)", besti);
         concatstring(msg, buf, MAXTRANS);
     }
-    
+
     void checkintermission()
     {
         if(gamemillis >= gamelimit && !interm)
@@ -2638,15 +2638,15 @@ namespace server
                 vector<clientinfo *> best;
                 int besti;
                 char msg[MAXTRANS];
-                
+
                 copystring(msg, "\f1[BEST STATS] frags: \f7", MAXTRANS);
                 _BESTSTAT(frags)
                 _printbest(best, besti, msg);
-                
+
                 concatstring(msg, " deaths: \f7", MAXTRANS);
                 _BESTSTAT(deaths)
                 _printbest(best, besti, msg);
-                
+
                 if(m_teammode)
                 {
                     _BESTSTAT(teamkills)
@@ -2656,9 +2656,9 @@ namespace server
                         _printbest(best, besti, msg);
                     }
                 }
-                
+
                 concatstring(msg, " accuracy: \f7", MAXTRANS);
-                
+
                 best.setsize(0);
                 best.add(clients[0]);
                 besti = best[0]->state.damage*100/max(best[0]->state.shotdamage, 1);
@@ -2675,7 +2675,7 @@ namespace server
                         best.add(clients[i]);
                     }
                 }
-                
+
                 int l = min(best.length(), 2);
                 loopi(l)
                 {
@@ -2684,7 +2684,7 @@ namespace server
                 }
                 defformatstring(buf)(" \f1(\f0%i%%\f1)", besti);
                 concatstring(msg, buf, MAXTRANS);
-                
+
                 sendf(-1, 1, "ris", N_SERVMSG, msg);
             }
         }
@@ -2718,13 +2718,13 @@ namespace server
                 actor->state.effectiveness += fragvalue*friends/float(max(enemies, 1));
             }
             teaminfo *t = m_teammode ? teaminfos.access(actor->team) : NULL;
-            if(t) t->frags += fragvalue; 
+            if(t) t->frags += fragvalue;
             sendf(-1, 1, "ri5", N_DIED, target->clientnum, actor->clientnum, actor->state.frags, t ? t->frags : 0);
             target->position.setsize(0);
             if(smode) smode->died(target, actor);
             ts.state = CS_DEAD;
             ts.lastdeath = gamemillis;
-            if(actor!=target && isteam(actor->team, target->team)) 
+            if(actor!=target && isteam(actor->team, target->team))
             {
                 actor->state.teamkills++;
                 sendteamkillmessage(actor);
@@ -2815,13 +2815,13 @@ namespace server
             return;
         }
         if(!gs.isalive(gamemillis) || wait < gs.gunwait) return; //tolerate this
-        
+
         if(gs.ammo[gun] <= 0)
         {
             if(!m_edit) _cheater(ci, "gunhack::noammo", AC_GUNHACK, 5);
             return;
         }
-        
+
         if(gun!=GUN_FIST) gs.ammo[gun]--;
         gs.lastshot = millis;
         gs.gunwait = guns[gun].attackdelay;
@@ -2929,7 +2929,7 @@ namespace server
         while(ci->events.length() > keep) delete ci->events.pop();
         ci->timesync = false;
     }
-    
+
     void serverupdate()
     {
         if(shouldstep && !gamepaused)
@@ -2974,7 +2974,7 @@ namespace server
         if(nextexceeded && gamemillis > nextexceeded && (!m_timed || gamemillis < gamelimit))
         {
             nextexceeded = 0;
-            loopvrev(clients) 
+            loopvrev(clients)
             {
                 clientinfo &c = *clients[i];
                 if(c.state.aitype != AI_NONE) continue;
@@ -3014,7 +3014,7 @@ namespace server
     };
 
 	VAR(serverspecmod, 0, 0, 2);	//server spectates moded map owners: 0=no, 1=for this map only, 2=perm (saved in clientinfo)
-	
+
     void checkmaps(int req)
     {
         if(m_edit || !smapname[0]) return;
@@ -3122,7 +3122,7 @@ namespace server
         if(!ci) return;
         loopv(clients)
         {
-            if(clients[i]->authkickvictim == ci->clientnum) clients[i]->cleanauth(); 
+            if(clients[i]->authkickvictim == ci->clientnum) clients[i]->cleanauth();
             if(clients[i]->_xi.tkiller == ci) clients[i]->_xi.tkiller = 0;
             if(clients[i]->_xi.votekickvictim == ci->clientnum) clients[i]->_xi.votekickvictim = -1;
         }
@@ -3151,7 +3151,7 @@ namespace server
         enet_uint32 ip, mask;
     };
     vector<gbaninfo> gbans;
-    
+
     void cleargbans()
     {
         gbans.shrink(0);
@@ -3205,7 +3205,7 @@ namespace server
             if(checkgban(getclientip(ci->clientnum))) disconnect_client(ci->clientnum, DISC_IPBAN);
         }
     }
-    
+
     struct pbaninfo
     {
         enet_uint32 ip, mask;
@@ -3213,12 +3213,12 @@ namespace server
         char reason[80];
     };
     vector<pbaninfo> pbans;
-    
+
     void clearpbans()
     {
         pbans.shrink(0);
     }
-    
+
     bool checkpban(uint ip)
     {
         time_t currtime;
@@ -3227,7 +3227,7 @@ namespace server
         loopvrev(pbans) if((ip & pbans[i].mask) == pbans[i].ip) return true;
         return false;
     }
-    
+
     void addpban(const char *name, time_t expire, const char *reason)
     {
         pbaninfo b;
@@ -3253,7 +3253,7 @@ namespace server
         loopv(pbans) if(expire < pbans[i].expire) { pbans.insert(i, b); return; }
         pbans.add(b);
     }
-    
+
     int allowconnect(clientinfo *ci, const char *pwd = "")
     {
         if(serverpass[0])
@@ -3290,7 +3290,7 @@ namespace server
         ci->cleanauth();
         if(ci->connectauth) disconnect_client(ci->clientnum, ci->connectauth);
     }
-    
+
     void authfailed(uint id)
     {
         authfailed(findauth(id));
@@ -3305,7 +3305,7 @@ namespace server
         if(ci->authkickvictim >= 0)
         {
             if(setmaster(ci, true, "", ci->authname, NULL, PRIV_AUTH, false, true))
-                trykick(ci, ci->authkickvictim, ci->authkickreason, ci->authname, NULL, PRIV_AUTH);    
+                trykick(ci, ci->authkickvictim, ci->authkickreason, ci->authname, NULL, PRIV_AUTH);
             ci->cleanauthkick();
         }
         else setmaster(ci, true, "", ci->authname, NULL, PRIV_AUTH);
@@ -3330,7 +3330,7 @@ namespace server
         if(ci->authdesc[0])
         {
             userinfo *u = users.access(userkey(ci->authname, ci->authdesc));
-            if(u) 
+            if(u)
             {
                 uint seed[3] = { ::hthash(serverauth) + detrnd(size_t(ci) + size_t(user) + size_t(desc), 0x10000), uint(totalmillis), randomMT() };
                 vector<char> buf;
@@ -3350,19 +3350,19 @@ namespace server
     }
 
     void masterconnected() {}
-    
+
     void masterdisconnected()
     {
         loopvrev(clients)
         {
             clientinfo *ci = clients[i];
-            if(ci->authreq) authfailed(ci); 
+            if(ci->authreq) authfailed(ci);
         }
     }
-    
+
     bool answerchallenge(clientinfo *ci, uint id, char *val, const char *desc)
     {
-        if(ci->authreq != id || strcmp(ci->authdesc, desc)) 
+        if(ci->authreq != id || strcmp(ci->authdesc, desc))
         {
             ci->cleanauth();
             return !ci->connectauth;
@@ -3376,7 +3376,7 @@ namespace server
             if(ci->authchallenge && checkchallenge(val, ci->authchallenge))
             {
                 userinfo *u = users.access(userkey(ci->authname, ci->authdesc));
-                if(u) 
+                if(u)
                 {
                     if(ci->connectauth && !ci->connected) connected(ci);
                     if(ci->authkickvictim >= 0)
@@ -3387,8 +3387,8 @@ namespace server
                     else setmaster(ci, true, "", ci->authname, ci->authdesc, u->privilege);
                 }
             }
-            ci->cleanauth(); 
-        } 
+            ci->cleanauth();
+        }
         else if(!requestmasterf("confauth %u %s\n", id, val))
         {
             ci->cleanauth();
@@ -3484,7 +3484,7 @@ namespace server
         aiman::addclient(ci);
 
         if(m_demo) setupdemoplayback();
-        
+
         {
             unsigned int t;
             _hp.args[0] = &ci->clientnum;
@@ -3493,19 +3493,19 @@ namespace server
             _hp.args[2] = &t;
             _exechook("connected");
         }
-        
+
         if(servermotd[0]) sendf(ci->clientnum, 1, "ris", N_SERVMSG, servermotd);
 
         if(publicserver != 1 && autolockmaster && numclients(-1, false) >= autolockmaster) mastermask &= ~MM_AUTOAPPROVE;
     }
 
-    
+
 // **************************    ZEROMOD     **********************************************
     void _privfail(clientinfo *ci);
-    
+
     VAR(serverdebug, 0, 1, 1);
     VAR(debuglevel, 0, PRIV_ROOT, PRIV_ROOT+1);
-    
+
     void _debug(const char *msg)
     {
         string buf;
@@ -3523,7 +3523,7 @@ namespace server
         int priv;       //privilege required to call function
         void (*func)(const char *cmd, const char *args, clientinfo *ci);    //function pointer
         bool hidden, disabled;  //some flags
-        
+
         _funcdeclaration()
         {
             name[0] = 0;
@@ -3531,7 +3531,7 @@ namespace server
             func = 0;
             hidden = disabled = false;
         }
-        
+
         _funcdeclaration(const char *name, int priv, void (*func)(const char *cmd, const char *args, clientinfo *ci), bool hidden = false, bool disabled = false)
         {
             copystring(_funcdeclaration::name, name);
@@ -3550,13 +3550,13 @@ namespace server
             sendf(clients[i]->clientnum, 1, "ris", N_SERVMSG, msg);
         }
     }
-    
+
     void _notifypriv(const char *msg, int min, int max)
     {
         loopv(clients) if(clients[i]->state.aitype==AI_NONE && (clients[i]->privilege>=min) && (clients[i]->privilege<=max))
             sendf(clients[i]->clientnum, 1, "ris", N_SERVMSG, msg);
     }
-    
+
     int _argsep(char *str, int c, char *argv[], char sep = ' ') //separate args (str = source string; c = expected argc; argv = ptrs array; ret = argc)
     {
         char *s;
@@ -3578,21 +3578,21 @@ namespace server
         }
         return argc;
     }
-    
+
 //  >>> Executable functions and extensions
     void _wall(const char *cmd, const char *args, clientinfo *ci)
     {
         if(!args || !*args) return;
         sendf(-1, 1, "ris", N_SERVMSG, args);
     }
-    
+
     struct _manpage
     {
         char name[256];
         char args[64];
         char help[1024];
 //      int expire;
-        
+
         _manpage()
         {
 //          expire = 0;
@@ -3606,13 +3606,13 @@ namespace server
         }
     };
     vector<_manpage *> _manpages;
-    
+
     bool _readmanfile(const char *cmd)
     {
         string buf;
-        
+
         if(!cmd || !*cmd) return false;
-        
+
         char badchars[] = "/$%^&*()\\'\"`~";
         for(const char *p = cmd; *p; p++) for(char *b = badchars; *b; b++) if(*p == *b) return false;
 #ifdef WIN32
@@ -3623,11 +3623,11 @@ namespace server
         FILE *f;
         f = fopen(buf, "r");
         if(!f) return false;
-        
+
         _manpage *mp;
         mp = new _manpage;
         _manpages.add(mp);
-        
+
         if(!fgets(mp->args, 64, f))
         {
             fclose(f);
@@ -3647,12 +3647,12 @@ namespace server
         fclose(f);
         return true;
     }
-    
+
     static void _addmanpage(const char *cmd, const char *arg, const char *desc)
 	{
 		_manpages.add(new _manpage(cmd, arg, desc));
 	}
-    
+
     void _initman()
     {
         _addmanpage("help man", "[command]", "Shows help about command or prints avaiable commands");
@@ -3684,7 +3684,7 @@ namespace server
         _addmanpage("listgbans showgbans", "", "Shows gbas list");
         _addmanpage("nodamage", "[1/0]", "Disables damage in coop edit mode");
     }
-    
+
     void _man(const char *cmd, const char *args, clientinfo *ci)
     {
         char msg[MAXTRANS];
@@ -3692,9 +3692,9 @@ namespace server
         int searchc = 0;
         bool first;
         bool found;
-        
+
         if(!ci) return;
-        
+
         if(!args || !*args)
         {
             if(!ci) return;
@@ -3724,9 +3724,9 @@ namespace server
             }
             return;
         }
-        
+
         if(cmd && *cmd && !strcmp(cmd, "usage")) usage = true;
-                
+
     _search:
         found = false;
         loopv(_manpages) if(_manpages[i])
@@ -3768,10 +3768,10 @@ namespace server
             if(++searchc < 3 && _readmanfile(args)) goto _search;
             else formatstring(msg)("\f1[HELP] \f2Help page for command \f0%s \f2was not found.", args);
         }
-        
+
 		sendf(ci->ownernum, 1, "ris" , N_SERVMSG, msg);
     }
-    
+
     void _showgbans(const char *cmd, const char *args, clientinfo *ci)
     {
         union { uchar b[sizeof(enet_uint32)]; enet_uint32 i; } ip, mask;
@@ -3790,7 +3790,7 @@ namespace server
             sendf(sender, 1, "ris", N_SERVMSG, msg);
         }
     }
-    
+
     void _spectate(clientinfo *ci, bool val)
     {
         if(!ci || (ci->state.state==CS_SPECTATOR ? val : !val)) return;
@@ -3813,7 +3813,7 @@ namespace server
         sendf(-1, 1, "ri3", N_SPECTATOR, ci->clientnum, val);
         if(!val && !hasmap(ci)) rotatemap(true);
     }
-    
+
     void _forcespectator(clientinfo *ci, int spec)
     {
         string msg;
@@ -3838,11 +3838,11 @@ namespace server
             sendf(-1, 1, "ris", N_SERVMSG, msg);
         }
     }
-    
+
     void _spectfunc(const char *cmd, const char *args, clientinfo *ci)
     {
         int spec = (!cmd || !*cmd || !strcmp(cmd, "spectate") || !strcmp(cmd, "spec")) ? 1 : 0;
-        
+
         if(!args || !*args) _forcespectator(0, spec);
         else
         {
@@ -3862,7 +3862,7 @@ namespace server
             _forcespectator(cx, spec);
         }
     }
-    
+
     void _editmute(clientinfo *ci, int val)
     {
         string msg;
@@ -3879,7 +3879,7 @@ namespace server
         if(!ci || ci->state.aitype == AI_NONE)
             sendf( ci ? ci->clientnum : -1, 1, "ris", N_SERVMSG, msg);
     }
-    
+
     void _editmutefunc(const char *cmd, const char *args, clientinfo *ci)
     {
         int val = (!cmd || !*cmd || !strcmp(cmd, "editmute")) ? 1 : 0;
@@ -3915,7 +3915,7 @@ namespace server
             _editmute(cx, val);
         }
     }
-    
+
     void _mute(clientinfo *ci, int val)
     {
         string msg;
@@ -3932,7 +3932,7 @@ namespace server
         if(!ci || ci->state.aitype == AI_NONE)
             sendf(ci ? ci->clientnum : -1, 1, "ris", N_SERVMSG, msg);
     }
-    
+
     void _mutefunc(const char *cmd, const char *args, clientinfo *ci)
     {
         int val = (!cmd || !*cmd || !strcmp(cmd, "mute")) ? 2 : 0;
@@ -3968,10 +3968,10 @@ namespace server
             _mute(cx, val);
         }
     }
-    
+
     void _spy(clientinfo *ci, bool val)
     {
-        
+
         if(!ci || (ci->_xi.spy ? val : !val) || ci->state.aitype != AI_NONE) return;
         ci->_xi.spy = val;
         if(val)
@@ -3998,9 +3998,9 @@ namespace server
                 _putmaster(q);
                 sendpacket(ci->clientnum, 1, q.finalize());
             }
-            
+
             sendf(-1, 1, "rxi2", ci->clientnum, N_CDIS, ci->clientnum);
-            
+
             sendf(ci->clientnum, 1, "ri3is", N_SPECTATOR, ci->clientnum, 1, N_SERVMSG, "\f1[SPY] \f0You entered spy mode");
         }
         else
@@ -4018,21 +4018,21 @@ namespace server
             sendinitclient(ci);
             sendresume(ci);
             sendf(-1, 1, "ri3", N_SPECTATOR, ci->clientnum, ci->state.state==CS_SPECTATOR ? 1 : 0);
-            
+
             //send out privileges
             packetbuf p(MAXTRANS, ENET_PACKET_FLAG_RELIABLE);
             _putmaster(p);
             sendpacket(-1, 1, p.finalize());
-            
+
             sendf(ci->clientnum, 1, "ris", N_SERVMSG, "\f1[SPY] \f0You left spy mode");
         }
     }
-    
+
     void _spyfunc(const char *cmd, const char *args, clientinfo *ci)
     {
         string buf;
         char *argv[2];
-        
+
         if(!args || !*args)
         {
             if(!ci) return;
@@ -4042,9 +4042,9 @@ namespace server
         {
             copystring(buf, args);
             _argsep(buf, 2, argv);
-            
+
             bool val = atoi(argv[0])!=0;
-            
+
             if(argv[1] && *argv[1])
             {
                 int cn = atoi(argv[1]);
@@ -4075,29 +4075,29 @@ namespace server
         char name[64];
         void *ptr;
     };
-    
+
     vector<_pluginfunc *> _plfuncs; //plugin functions - intermodule communication
-    
+
     struct _hookfunc
     {
         int (*func)(_hookparam *);
 //      int priority;
     };
-    
+
     struct _hookstruct
     {
         char name[16];
 //      int num;
         vector<_hookfunc> funcs;
     };
-    
+
     vector<_hookstruct *> _hookfuncs;
-    
+
     int _exechook(const char *name)
     {
         bool found=false;
         int ret;
-        
+
         if(!name || !name[0]) return -1;  //<0==fail
         //for(int i = 0; i < _hookfuncs.length(); i++)
         loopvrev(_hookfuncs)
@@ -4116,7 +4116,7 @@ namespace server
         }
         return found ? ret : -1;
     }
-    
+
     void _addhook(const char *name, int (*hookfunc)(_hookparam *))
     {
         _hookstruct *hs = 0;
@@ -4142,7 +4142,7 @@ namespace server
             hs->funcs.add(hf);
         }
     }
-    
+
     void _delhook(const char *name, int (*hookfunc)(_hookparam *))
     {
         loopv(_hookfuncs) if(_hookfuncs[i] && !strcmp(_hookfuncs[i]->name, name))
@@ -4163,7 +4163,7 @@ namespace server
             break;
         }
     }
-    
+
     void _setext(char *s, void *ptr)
     {
         _pluginfunc *p = 0;
@@ -4182,15 +4182,15 @@ namespace server
             _plfuncs.add(p);
             strncpy(p->name, s, 64);
         }
-        
+
         p->ptr = ptr;
     }
-    
+
     void _testfunc()
     {
         sendf(-1, 1, "ris", N_SERVMSG, "[DEBUG] Plugin test function");
     }
-    
+
     void * _getext(char *s)
     {
         if(!strcmp(s, "test")) return (void *)_testfunc;
@@ -4208,7 +4208,7 @@ namespace server
         }
         return 0;
     }
-    
+
     struct _module
     {
 #ifdef WIN32
@@ -4219,7 +4219,7 @@ namespace server
         char name[64];
     };
     vector<_module> _modules;
-    
+
     void _load(const char *cmd, const char *args, clientinfo *ci)
     {
         char *argv[2];
@@ -4227,16 +4227,16 @@ namespace server
         bool needload;
         bool needunload;
         string fname;
-        
+
         if(!args || !*args) return;
-        
+
         needload = (!cmd || !*cmd || !strcmp(cmd, "load") || !strcmp(cmd, "reload"));
         needunload = (cmd && *cmd && (!strcmp(cmd, "reload") || !strcmp(cmd, "unload")));
-        
+
         copystring(buf, args);
-        
+
         _argsep(buf, 2, argv);
-        
+
         char badchars[] = "/$%^&*()\\'\"`~";
         for(char *s = argv[0]; *s; s++)
         {
@@ -4249,13 +4249,13 @@ namespace server
                 }
             }
         }
-        
+
 #ifdef WIN32
         formatstring(fname)("modules\\%s.dll", argv[0]);
 #else
         formatstring(fname)("modules/lib%s.so", argv[0]);
 #endif
-        
+
         _module *m = 0;
         int mi;
         loopv(_modules) if(!strcmp(argv[0], _modules[i].name))
@@ -4273,7 +4273,7 @@ namespace server
             strncpy(m->name, argv[0], 64);
             m->h = 0;
         }
-        
+
         if(m->h)
         {
             if(needload)
@@ -4318,7 +4318,7 @@ namespace server
                 m->h = 0;
             }
         }
-        
+
         if(needload)
         {
             m->h = Z_OPENLIB(fname);
@@ -4329,7 +4329,7 @@ namespace server
                 _modules.remove(mi);
                 return;
             }
-            
+
             char *(*initfunc)(void *, void *, char *);
             *(Z_LIBFUNC *)(&initfunc) = Z_GETSYM(m->h, "z_init");
             if(!initfunc)
@@ -4340,9 +4340,9 @@ namespace server
                 _modules.remove(mi);
                 return;
             }
-            
+
             //_debug("executing z_init");
-            
+
             char *ret;
             ret = initfunc((void *)_getext, (void *)_setext, argv[1]);
             if(ret)
@@ -4359,7 +4359,7 @@ namespace server
             _modules.remove(mi);
         }
     }
-    
+
     void _setvar(const char *cmd, const char *args, clientinfo *ci)
 	{
 		if(!cmd || !cmd[0]) return;
@@ -4371,7 +4371,7 @@ namespace server
             else logoutf("%s", msg);
 		}
 	}
-	
+
 	void _setsvar(const char *cmd, const char *args, clientinfo *ci)
 	{
 		if(!cmd || !cmd[0]) return;
@@ -4383,7 +4383,7 @@ namespace server
     {
         string buf;
         char *argv[2];
-        
+
     }
     */
 
@@ -4394,21 +4394,21 @@ namespace server
         int cnc;
         string buf;
         string msg;
-        
+
         if(!args || !*args)
         {
             _man("usage", cmd, ci);
             return;
         }
-        
+
         copystring(buf, args);
-        
+
         _argsep(buf, 2, argv);
-        
+
         if(!argv[1] || !*argv[1]) return;
-        
+
         cnc = _argsep(argv[0], 32, cns, ',');
-        
+
         vector<int> clientnums;
         loopi(cnc)
         {
@@ -4428,28 +4428,28 @@ namespace server
                 if(j == clientnums[k]) { exists = true; break; }
             if(!exists) clientnums.add(j);
         }
-        
+
         formatstring(msg)("\f1[PM:\f0%i\f1:\f7%s\f1] \f0%s", ci->clientnum, colorname(ci), argv[1]);
-        
-        loopvrev(clientnums) sendf(clientnums[i], 1, "ris", N_SERVMSG, msg);            
+
+        loopvrev(clientnums) sendf(clientnums[i], 1, "ris", N_SERVMSG, msg);
     }
-    
+
     void _setpriv(const char *cmd, const char *args, clientinfo *ci)
     {
         string buf;
         char *argv[2];
         int cn, privilege;
         clientinfo *cx;
-        
+
         if(!args || !*args)
         {
             _man("usage", cmd, ci);
             return;
         }
-        
+
         copystring(buf, args);
         _argsep(buf, 2, argv);
-        
+
         if(!cmd || !*cmd || !strcmp(cmd, "setpriv") || !strcmp(cmd, "givepriv") || !strcmp(cmd, "priv"))
         {
             if(!*argv[0])
@@ -4457,7 +4457,7 @@ namespace server
                 _man("usage", cmd, ci);
                 return;
             }
-            
+
             if(!argv[1] || !*argv[1])
             {
                 if(!ci) return;
@@ -4473,7 +4473,7 @@ namespace server
                     return;
                 }
             }
-            
+
             privilege = atoi(argv[1]);
             if(!privilege && strcmp(argv[1], "0"))
             {
@@ -4542,7 +4542,7 @@ namespace server
             _notify("\f2[DEBUG] This function isn't implemented yet", ci);
             return;
         }
-        
+
         cx = (clientinfo *)getclientinfo(cn);
         if(!cx)
         {
@@ -4550,7 +4550,7 @@ namespace server
             _notify(msg, ci);
             return;
         }
-        
+
         if(_getpriv(ci)>=PRIV_ROOT ||
             ((_getpriv(ci)>_getpriv(cx) || cx==ci) &&
             (privilege>=0) &&
@@ -4561,16 +4561,16 @@ namespace server
                 !(cx->privilege == PRIV_AUTH && cx->authname[0] && !cx->authdesc[0]));
             bool ishidden = cx->_xi.spy || (serverhidepriv && privilege >= (serverhidepriv == 1 ? PRIV_ADMIN : PRIV_AUTH));
             int oldpriv = cx->privilege;
-            
+
             defformatstring(msg)("%s %s %s%s", colorname(cx), privilege?"claimed":"relinquished",
                                  privname(privilege ? privilege : cx->privilege), !(ishidden || (oldpriv && washidden && !privilege)) ? "" : " \f1(hidden)");
             cx->privilege = privilege;
-            
+
             //if was gauther, unset authname, so it will be no longer identified as claimed as gauther
             if(cx->authname[0] && !cx->authdesc[0]) cx->authname[0] = '\0';
 
             logoutf("%s", msg);
-            
+
             bool hasmaster = false;
             loopv(clients) if(clients[i]->privilege >= PRIV_MASTER) { hasmaster = true; break; }
             if(!hasmaster)
@@ -4605,7 +4605,7 @@ namespace server
                         sendpacket(clients[i]->ownernum, 1, _p);
                 }
             }
-            
+
             if(ishidden || (oldpriv && washidden))
             {
                 packetbuf q(MAXTRANS, ENET_PACKET_FLAG_RELIABLE);
@@ -4616,12 +4616,12 @@ namespace server
                 sendpacket(cx->ownernum, 1, _q);
                 if(ci && ci != cx) sendpacket(ci->ownernum, 1, _q);
             }
-            
+
             checkpausegame();
         }
         else _privfail(ci);
     }
-    
+
     void _exec(const char *cmd, const char *args, clientinfo *ci)
     {
         if(!args || !*args)
@@ -4633,7 +4633,7 @@ namespace server
         _notify(msg, ci, PRIV_ADMIN);
         execute(args);
     }
-    
+
     void _np(const char *cmd, const char *args, clientinfo *ci)
     {
         string msg;
@@ -4654,12 +4654,12 @@ namespace server
         sendf(ci->clientnum, 1, "ris", N_SERVMSG, msg);
         ci->_xi.tkiller = 0;
     }
-    
+
     void _interm(const char *cmd, const char *args, clientinfo *ci)
     {
         startintermission();
     }
-    
+
     void _rename(clientinfo *ci, const char *name, bool broadcast = true)
     {
         uchar buf[MAXSTRLEN];
@@ -4677,7 +4677,7 @@ namespace server
         p.put(buf, b.len);
         sendpacket(ci->ownernum, 1, p.finalize());
     }
-    
+
     void _renamefunc(const char *cmd, const char *args, clientinfo *ci)
     {
         string buf;
@@ -4696,21 +4696,21 @@ namespace server
             _notify("\f3Client with such client number not found", ci);
             return;
         }
-        
+
         if(argv[1])
         {
             filtertext(cx->name, argv[1], false, MAXNAMELEN);
             if(!cx->name[0]) copystring(cx->name, "unnamed");
         }
         else copystring(cx->name, "unnamed");
-        
+
         _rename(cx, cx->name);
     }
 
     void _sendmap(clientinfo *ci, clientinfo *target)
     {
         if(!target) return;
-        
+
         if(!mapdata)
         {
             if(ci) sendf(ci->clientnum, 1, "ris", N_SERVMSG, "no map to send");
@@ -4726,7 +4726,7 @@ namespace server
             target->needclipboard = totalmillis ? totalmillis : 1;
         }
     }
-    
+
     void _sendto(const char *cmd, const char *args, clientinfo *ci)
     {
         int cn;
@@ -4745,7 +4745,7 @@ namespace server
             }
             return;
         }
-        
+
         clientinfo *cx = (clientinfo *)getclientinfo(cn);
         if(!cx)
         {
@@ -4781,18 +4781,18 @@ namespace server
             else logoutf("_ban:no such cn");
             return;
         }
-        
+
         if(_getpriv(ci) < PRIV_ROOT && _getpriv(ci) < _getpriv(cx))
         {
             _privfail(ci);
             return;
         }
-        
+
         int t;
-        
+
         defformatstring(msg)("\f3[BAN] \f5%i.%i.%i.%i is banned for %s", ip&0xFF, (ip>>8)&0xFF, (ip>>16)&0xFF, (ip>>24)&0xFF,
                              (argv[1]&&argv[1][0])?argv[1]:"4h");
-        
+
         if(argv[1] && argv[1][0])
         {
             filtertext(argv[1], argv[1], false);
@@ -4825,13 +4825,13 @@ namespace server
             t *= m;
         }
         else t = 4*60*60000;
-        
+
         sendservmsg(msg);
-        
+
         addban(ip, t);
         kickclients(ip, 0);
     }
-    
+
     struct _kickvote
     {
         int cn, n;
@@ -4901,7 +4901,7 @@ namespace server
             formatstring(buf)(" \f3(\f0%i \f2needed\f3)", nc/2);
             concatstring(msg, buf);
             sendf(-1, 1, "ris", N_SERVMSG, msg);
-            
+
             if(!timesugg || totalmillis - timesugg >= 5000)  //display suggestions each 5 voting seconds
             {
                 timesugg = totalmillis ? totalmillis : 1;
@@ -4909,7 +4909,7 @@ namespace server
             }
         }
     }
-    
+
     bool _votekick(clientinfo *ci, int victim)
     {
         string msg;
@@ -4927,7 +4927,7 @@ namespace server
         _checkvotekick(ci);
         return true;
     }
-    
+
     void _votekickfunc(const char *cmd, const char *args, clientinfo *ci)
     {
         int cn;
@@ -4944,7 +4944,7 @@ namespace server
         }
         if(!_votekick(ci, cn)) sendf(ci->clientnum, 1, "ris", N_SERVMSG, "\f3[FAIL] Votekick failed");
     }
-    
+
     void _stats(const char *cmd, const char *args, clientinfo *ci)
     {
         vector<clientinfo *> cns;
@@ -4952,30 +4952,30 @@ namespace server
         int cnc;
         string buf;
         string msg;
-        
+
         if(args) copystring(buf, args);
         else buf[0]=0;
-            
+
         if(args && strchr(args,',')) cnc = _argsep(buf, 32, argv, ',');
         else cnc = _argsep(buf, 32, argv);
-        
+
         //parse clientnums
         loopi(cnc)
         {
             int cn = atoi(argv[i]);
             if(!cn && argv[i][0]!='0') continue;
-            
+
             if(cn < 0)
             {
                 cns.setsize(0);
                 loopj(clients.length()) if(clients[j]) cns.add(clients[j]);
                 break;
             }
-            
+
             bool exists=false;
             loopvj(cns) if(cn == cns[j]->clientnum) { exists=true; break; }
             if(exists) continue;
-            
+
             clientinfo *cx = getinfo(cn);
             if(cx) cns.add(cx);
             else
@@ -4994,7 +4994,7 @@ namespace server
                 loopv(clients) cns.add(clients[i]);
             }
         }
-        
+
         int sendcn = ci ? ci->clientnum : -1;
         loopv(cns)
         {
@@ -5030,7 +5030,7 @@ namespace server
             sendf(sendcn, 1, "ris", N_SERVMSG, msg);
         }
     }
-    
+
     void _getip(const char *cmd, const char *args, clientinfo *ci)
     {
         string msg;
@@ -5056,18 +5056,18 @@ namespace server
         formatstring(msg)("\fs\f1[IP:\f0%i\f1:\f7%s\f1] \f5%i.%i.%i.%i\fr", cn, colorname(cx), ip&0xFF, (ip>>8)&0xFF, (ip>>16)&0xFF, (ip>>24)&0xFF);
         sendf(ci ? ci->clientnum : -1, 1, "ris", N_SERVMSG, msg);
     }
-    
+
     void _info(const char *cmd, const char *args, clientinfo *ci)
     {
         string msg, buf;
         uint t, months, weeks, days, hours, minutes, seconds;
-        
+
         copystring(msg,
             "\f5[INFO] \f7Cube 2: Sauerbraten \f2server modification \f7zeromod \f2(based on original server)\n"
             "\f5[INFO] \f7Contributors: \f0/dev/zero, ~Haytham");
-        
+
         sendf(ci ? ci->clientnum : -1, 1, "ris", N_SERVMSG, msg);
-        
+
         if(serveradmin[0])
         {
             copystring(msg, "\f5[INFO] \f7Administrator(s): \f0");
@@ -5118,11 +5118,11 @@ namespace server
 #endif
             " \f2"
         );
-        
+
         concatstring(msg, (sizeof(void *) == 8) ? "64-bit" : "32-bit");
-        
+
         concatstring(msg, "\n\f5[INFO] \f7Uptime:");
-        
+
         t = totalsecs;
         months = t / (30*24*60*60);
         t = t % (30*24*60*60);
@@ -5135,46 +5135,46 @@ namespace server
         minutes = t / 60;
         t = t % 60;
         seconds = t;
-        
+
         if(months)
         {
             formatstring(buf)(" \f0%u \f2months", months);
             concatstring(msg, buf);
         }
-        
+
         if(weeks)
         {
             formatstring(buf)(" \f0%u \f2weeks", weeks);
             concatstring(msg, buf);
         }
-        
+
         if(days)
         {
             formatstring(buf)(" \f0%u \f2days", days);
             concatstring(msg, buf);
         }
-        
+
         if(hours)
         {
             formatstring(buf)(" \f0%u \f2hours", hours);
             concatstring(msg, buf);
         }
-        
+
         if(minutes)
         {
             formatstring(buf)(" \f0%u \f2minutes", minutes);
             concatstring(msg, buf);
         }
-        
+
         if(seconds)
         {
             formatstring(buf)(" \f0%u \f2seconds", seconds);
             concatstring(msg, buf);
         }
-        
+
         sendf(ci ? ci->clientnum : -1, 1, "ris", N_SERVMSG, msg);
     }
-    
+
     void _nodamagefunc(const char *cmd, const char *args, clientinfo *ci)
     {
         bool onlyask;
@@ -5184,10 +5184,10 @@ namespace server
             else logoutf("nodamage is only avaiable in coop edit mode (1)");
             return;
         }
-        
+
         if(args && args[0]) onlyask = false;
         else onlyask = true;
-        
+
         if(!onlyask)
         {
             if(disabledamage < 0)
@@ -5198,12 +5198,12 @@ namespace server
             }
             _nodamage = atoi(args) ? 1 : 0;
         }
-        
+
         defformatstring(msg)("nodamage %sabled", _nodamage ? "\f0en" : "\f4dis");
         if(!onlyask || ci) sendf((!onlyask || !ci) ? -1 : ci->clientnum, 1, "ris", N_SERVMSG, msg);
         else logoutf("%s", msg);    //%s isnt needed, but eliminates some warnings
     }
-    
+
     void _persistfunc(const char *cmd, const char *args, clientinfo *ci)
     {
         string msg;
@@ -5218,7 +5218,7 @@ namespace server
     }
 
 //  >>> Server internals
-    
+
     static void _addfunc(const char *s, int priv, void (*_func)(const char *cmd, const char *args, clientinfo *ci))
     {
         char buf[MAXTRANS];
@@ -5228,7 +5228,7 @@ namespace server
         argc = _argsep(buf, 260, argv);
         loopi(argc) if(argv[i]) _funcs.add(new _funcdeclaration(argv[i], priv, _func));
     }
-    
+
     static void _enablefunc(const char *s, bool val)
     {
         char buf[MAXTRANS];
@@ -5255,7 +5255,7 @@ namespace server
         argc = _argsep(buf, 260, argv);
         loopi(argc) if(argv[i]) _funcs.add(new _funcdeclaration(argv[i], priv, _func, true));
     }
-    
+
     void _initfuncs()
     {
         _addfunc("wall announce", PRIV_AUTH, _wall);
@@ -5287,13 +5287,13 @@ namespace server
         _addfunc("persist", PRIV_MASTER, _persistfunc);
         _addfunc("halt", PRIV_ROOT, _haltfunc);
     }
-    
+
     void _privfail(clientinfo *ci)
     {
         if(!ci) return;
         sendf(ci->ownernum, 1, "ris", N_SERVMSG, "\f3You do not have enough privileges to execute this command");
     }
-    
+
     void _nocommand(const char *cmd, clientinfo *ci)
     {
         string msg;
@@ -5304,7 +5304,7 @@ namespace server
         else formatstring(msg)("\f3Unknown command \"\f0%s\f3\". For a list of avaiable commands type \"\f3/servcmd help\f3\"", cmd);
         sendf(ci->ownernum, 1, "ris", N_SERVMSG, msg);
     }
-    
+
     inline int _getpriv(clientinfo *ci)
     {
         return ci ? ci->privilege : PRIV_ROOT;
@@ -5320,7 +5320,7 @@ namespace server
         copystring(str, cmd);
         _argsep(str, 2, argv);
         filtertext(argv[0], argv[0]);
-        
+
         loopv(_funcs) if(_funcs[i])
         {
             if(!strcmp(argv[0], _funcs[i]->name))
@@ -5341,13 +5341,13 @@ namespace server
         }
         if(!executed) _nocommand(argv[0], ci);
     }
-    
+
     void _checktext(char *text, clientinfo *ci)
     {
         char buf[16];
         char *argv[2];
         int argc;
-        
+
         if(!serversuggestnp || !ci || !ci->_xi.tkiller || !text[0]) return;
         copystring(buf, text, 16);
         argc = _argsep(buf, 2, argv);
@@ -5356,19 +5356,25 @@ namespace server
         if(argc >= 2 && (argv[0][0]=='n' || argv[0][0]=='N') && (argv[1][0]=='p' || argv[1][0]=='P') && (argv[1][1]=='r' || argv[1][1]=='R')) goto _np;
         return;
     _np:
+        string msg;
         if(commandchars[0])
-            sendf(ci->ownernum, 1, "ris", N_SERVMSG, "\f3[teamkill] \f2type \"\f0%cnp\f2\" to to forgive \f7%s \f2teamkill",
+        {
+            formatstring(msg)("\f3[teamkill] \f2type \"\f0%cnp\f2\" to to forgive \f7%s \f2teamkill",
                   commandchars[0], colorname(ci->_xi.tkiller));
+        }
         else
-            sendf(ci->ownernum, 1, "ris", N_SERVMSG, "\f3[teamkill] \f2type \"\f0/servcmd np\f2\" to to forgive \f7%s \f2teamkill",
-                  colorname(ci->_xi.tkiller));
+        {
+            formatstring(msg)("\f3[teamkill] \f2type \"\f0/servcmd np\f2\" to to forgive \f7%s \f2teamkill", colorname(ci->_xi.tkiller));
+        }
+        sendf(ci->ownernum, 1, "ris", N_SERVMSG, msg);
+
     }
-    
+
     ICOMMAND(zexec, "C", (char *cmd), _servcmd(cmd, 0));
     ICOMMAND(zload, "C", (char *modulename), _load("load", modulename, 0));
     ICOMMAND(zwall, "C", (char *message), _wall(0, message, 0));
     ICOMMAND(announce, "C", (char *message), _wall(0, message, 0));
-    
+
 // ****************************************************************************************
 
     void parsepacket(int sender, int chan, packetbuf &p)     // has to parse exactly each byte of the packet
@@ -5501,7 +5507,7 @@ namespace server
                 if(cp && (cp->state.state==CS_ALIVE || cp->state.state==CS_EDITING))
                 {
                     flushclientposition(*cp);
-                    sendf(-1, 0, "ri4x", N_TELEPORT, pcn, teleport, teledest, cp->ownernum); 
+                    sendf(-1, 0, "ri4x", N_TELEPORT, pcn, teleport, teledest, cp->ownernum);
                 }
                 break;
             }
@@ -5519,7 +5525,7 @@ namespace server
                 }
                 break;
             }
-                
+
             case N_FROMAI:
             {
                 int qcn = getint(p);
@@ -5608,7 +5614,7 @@ namespace server
             {
                 int gunselect = getint(p);
                 if(!cq || cq->state.state!=CS_ALIVE) break;
-                
+
                 if(gunselect < GUN_FIST || gunselect > GUN_PISTOL)
                 {
                     _cheater(cq, "gunhack::gunselect", AC_GUNHACK, 100);
@@ -5668,7 +5674,7 @@ namespace server
                     hit.rays = getint(p);
                     loopk(3) hit.dir[k] = getint(p)/DNF;
                 }
-                if(cq) 
+                if(cq)
                 {
                     cq->addevent(shot);
                     if(cq->state.hasammo(shot->gun, GUN_FIST)) cq->setpushed(); //DANGER may be used to hide cheat
@@ -5722,7 +5728,7 @@ namespace server
                 //QUEUE_MSG;
                 getstring(text, p);
                 if(!cq) break;
-                
+
                 if(totalmillis - ci->_xi.lastmsg >= 200) ci->_xi.msgnum = 0;
                 else ci->_xi.msgnum = max(ci->_xi.msgnum + 1, ci->_xi.msgnum);
                 ci->_xi.lastmsg = totalmillis;
@@ -5731,7 +5737,7 @@ namespace server
                     if(ci->_xi.msgnum < 160) sendf(sender, 1, "ris", N_SERVMSG, "\f3[ANTIFLOOD] N_TEXT was blocked");
                     break;
                 }
-                
+
                 filtertext(ftext, text);
                 _checktext(ftext, ci);
                 register char firstchar = ftext[0];
@@ -5780,7 +5786,7 @@ namespace server
             {
                 getstring(text, p);
                 if(!cq) break;
-                
+
                 if(totalmillis - ci->_xi.lastmsg >= 200) ci->_xi.msgnum = 0;
                 else ci->_xi.msgnum = max(ci->_xi.msgnum + 1, ci->_xi.msgnum);
                 ci->_xi.lastmsg = totalmillis;
@@ -5789,7 +5795,7 @@ namespace server
                     if(ci->_xi.msgnum < 160) sendf(sender, 1, "ris", N_SERVMSG, "\f3[ANTIFLOOD] N_SAYTEAM was blocked");
                     break;
                 }
-                
+
                 logoutf("%s <%s>: %s", colorname(cq), cq->team, text);
                 _checktext(text, ci);
                 if(cq->_xi.spy)
@@ -5822,7 +5828,7 @@ namespace server
             case N_SWITCHNAME:
             {
                 getstring(text, p);
-                
+
                 if(totalmillis - ci->_xi.lastmsg >= 200) ci->_xi.msgnum = 0;
                 else ci->_xi.msgnum = max(ci->_xi.msgnum + 1, ci->_xi.msgnum);
                 ci->_xi.lastmsg = totalmillis;
@@ -5831,7 +5837,7 @@ namespace server
                     if(ci->_xi.msgnum < 160) sendf(sender, 1, "ris", N_SERVMSG, "\f3[ANTIFLOOD] N_SWITCHNAME was blocked");
                     break;
                 }
-                
+
                 filtertext(ci->name, text, false, MAXNAMELEN);
                 if(!ci->name[0]) copystring(ci->name, "unnamed");
                 if(!ci->_xi.spy)
@@ -5845,7 +5851,7 @@ namespace server
             case N_SWITCHMODEL:
             {
                 ci->playermodel = getint(p);
-                
+
                 if(totalmillis - ci->_xi.lastmsg >= 200) ci->_xi.msgnum = 0;
                 else ci->_xi.msgnum = max(ci->_xi.msgnum + 1, ci->_xi.msgnum);
                 ci->_xi.lastmsg = totalmillis;
@@ -5854,7 +5860,7 @@ namespace server
                     if(ci->_xi.msgnum < 128) sendf(sender, 1, "ris", N_SERVMSG, "\f3[ANTIFLOOD] N_SWITCHMODEL was blocked");
                     break;
                 }
-                
+
                 if(!ci->_xi.spy) QUEUE_MSG;
                 break;
             }
@@ -5937,7 +5943,7 @@ namespace server
                 if(cq && !ci->_xi.spy && (ci != cq || ci->state.state!=CS_SPECTATOR)) { QUEUE_AI; QUEUE_MSG; }
                 break;
             }
-            
+
             case N_REMIP:
                 if(/*!ci || */ci->_xi.editmute || ci->state.state==CS_SPECTATOR || ci->_xi.spy) break;
                 if(totalmillis - ci->_xi.lastremip >= 500) ci->_xi.remipnum = 0;
@@ -5950,7 +5956,7 @@ namespace server
                 }
                 QUEUE_MSG;
                 break;
-            
+
             case N_EDITENT:
             {
                 int i = getint(p);
@@ -6108,12 +6114,12 @@ namespace server
             {
                 int who = getint(p);
                 getstring(text, p);
-                
+
                 filtertext(text, text, false, MAXTEAMLEN);
                 if(!ci->privilege) break;
                 clientinfo *wi = getinfo(who);
                 if(!m_teammode || !text[0] || !wi || !strcmp(wi->team, text)) break;
-                
+
                 if(totalmillis - ci->_xi.lastmsg >= 200) ci->_xi.msgnum = 0;
                 else ci->_xi.msgnum = max(ci->_xi.msgnum + 1, ci->_xi.msgnum);
                 ci->_xi.lastmsg = totalmillis;
@@ -6122,7 +6128,7 @@ namespace server
                     if(ci->_xi.msgnum < 320) sendf(sender, 1, "ris", N_SERVMSG, "\f3[ANTIFLOOD] N_SETTEAM was blocked");
                     break;
                 }
-                
+
                 if((!smode || smode->canchangeteam(wi, wi->team, text)) && addteaminfo(text))
                 {
                     if(wi->state.state==CS_ALIVE) suicide(wi);
@@ -6141,7 +6147,7 @@ namespace server
             {
                 int val = getint(p);
                 if(ci->privilege < (restrictdemos ? PRIV_ADMIN : PRIV_MASTER)) break;
-                if(!maxdemos || !maxdemosize) 
+                if(!maxdemos || !maxdemosize)
                 {
                     sendf(ci->clientnum, 1, "ris", N_SERVMSG, "the server has disabled demo recording");
                     break;
@@ -6302,7 +6308,7 @@ namespace server
                 {
                     ci->authkickvictim = victim;
                     ci->authkickreason = newstring(text);
-                } 
+                }
                 break;
             }
 
@@ -6336,7 +6342,7 @@ namespace server
             {
                 ci->cleanclipboard();
                 ci->lastclipboard = totalmillis ? totalmillis : 1;
-                
+
                 int size = server::msgsizelookup(type);
                 if(size<=0) { disconnect_client(sender, DISC_MSGERR); return; }
                 loopi(size-1) getint(p);
@@ -6358,7 +6364,7 @@ namespace server
             case N_PASTE:
             {
                 if(ci->state.state!=CS_SPECTATOR) sendclipboard(ci);
-                
+
                 int size = server::msgsizelookup(type);
                 if(size<=0) { disconnect_client(sender, DISC_MSGERR); return; }
                 loopi(size-1) getint(p);
@@ -6375,17 +6381,17 @@ namespace server
                 if(ci && cq && (ci != cq || ci->state.state!=CS_SPECTATOR)) { QUEUE_AI; QUEUE_MSG; }
                 break;
             }
-    
+
             case N_CLIPBOARD:
             {
-                int unpacklen = getint(p), packlen = getint(p); 
+                int unpacklen = getint(p), packlen = getint(p);
                 ci->cleanclipboard(false);
                 if(ci->state.state==CS_SPECTATOR)
                 {
                     if(packlen > 0) p.subbuf(packlen);
                     break;
                 }
-                if(packlen <= 0 || packlen > (1<<16) || unpacklen <= 0) 
+                if(packlen <= 0 || packlen > (1<<16) || unpacklen <= 0)
                 {
                     if(packlen > 0) p.subbuf(packlen);
                     packlen = unpacklen = 0;
@@ -6394,18 +6400,18 @@ namespace server
                 putint(q, N_CLIPBOARD);
                 putint(q, ci->clientnum);
                 putint(q, unpacklen);
-                putint(q, packlen); 
+                putint(q, packlen);
                 if(packlen > 0) p.get(q.subbuf(packlen).buf, packlen);
                 ci->clipboard = q.finalize();
                 ci->clipboard->referenceCount++;
                 break;
-            } 
+            }
 
             case N_SERVCMD:
             {
                 string ftext;
                 getstring(text, p);
-                
+
                 if(totalmillis - ci->_xi.lastmsg >= 200) ci->_xi.msgnum = 0;
                 else ci->_xi.msgnum = max(ci->_xi.msgnum + 1, ci->_xi.msgnum);
                 ci->_xi.lastmsg = totalmillis;
@@ -6414,14 +6420,14 @@ namespace server
                     if(ci->_xi.msgnum < 160) sendf(sender, 1, "ris", N_SERVMSG, "\f3[ANTIFLOOD] N_SERVCMD was blocked");
                     break;
                 }
-                
+
                 if(/*!ci || */(strlen(text) > MAXSTRLEN)) break;
                 filtertext(ftext, text);
                 logoutf("N_SERVMSG:%s:%s", colorname(ci), ftext);
                 _servcmd(text, ci);
                 break;
             }
-                     
+
             #define PARSEMESSAGES 1
             #include "capture.h"
             #include "ctf.h"
@@ -6464,7 +6470,7 @@ namespace server
             extserverinforeply(req, p);
             return;
         }
-        
+
         putint(p, numclients(-1, false, true));
         putint(p, gamepaused || gamespeed != 100 ? 7 : 5);                   // number of attrs following
         putint(p, PROTOCOL_VERSION);    // generic attributes, passed back below
