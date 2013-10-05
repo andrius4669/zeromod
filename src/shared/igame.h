@@ -90,8 +90,8 @@ namespace game
     extern void serverinfoendcolumn(g3d_gui *g, int i);
     extern bool serverinfoentry(g3d_gui *g, int i, const char *name, int port, const char *desc, const char *map, int ping, const vector<int> &attr, int np);
     extern bool needminimap();
-} 
- 
+}
+
 namespace server
 {
     extern void *newclientinfo();
@@ -107,6 +107,9 @@ namespace server
     extern void recordpacket(int chan, void *data, int len);
     extern void parsepacket(int sender, int chan, packetbuf &p);
     extern void sendservmsg(const char *s);
+    //zeromod
+    extern void sendservmsgf(const char *fmt, ...);
+    ////
     extern bool sendpackets(bool force = false);
     extern void serverinforeply(ucharbuf &req, ucharbuf &p);
     extern void serverupdate();

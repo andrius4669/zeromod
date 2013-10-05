@@ -133,6 +133,9 @@ namespace server
         int lastshot;
         projectilestate<8> rockets, grenades;
         int frags, flags, deaths, teamkills, shotdamage, damage, tokens;
+        //zeromod
+        int _suicides, _stolen, _returned;
+        ////
         int lasttimeplayed, timeplayed;
         float effectiveness;
 
@@ -158,6 +161,9 @@ namespace server
             timeplayed = 0;
             effectiveness = 0;
             frags = flags = deaths = teamkills = shotdamage = damage = tokens = 0;
+            //zeromod
+            _suicides = _stolen = _returned = 0;
+            ////
 
             lastdeath = 0;
 
@@ -237,7 +243,6 @@ namespace server
         int lastremip, remipnum;
         int teamkillmessageindex;
         int lasttakeflag;
-        bool flagrunvalid;
     };
 
     struct clientinfo
@@ -336,7 +341,6 @@ namespace server
             gameclip = false;
             _xi.tkiller = 0;
             _xi.lasttakeflag = 0;
-            _xi.flagrunvalid = false;
 			if(_xi.mute && _xi.mute < 2) _xi.mute = 0;
 			if(_xi.editmute && _xi.editmute < 2) _xi.editmute = 0;
 			if(_xi.forcedspectator && _xi.forcedspectator < 2) _xi.forcedspectator = 0;
@@ -573,8 +577,6 @@ namespace server
     int _newflagrun = 0;
     void _doflagrun(clientinfo *ci, int timeused)
     {
-        ci->_xi.lasttakeflag = 0;
-        ci->_xi.flagrunvalid = 0;
         if(timeused <= 500) _cheater(ci, "flaghack", AC_FLAGHACK, 50);
         if(serverflagruns)
         {
@@ -1641,7 +1643,7 @@ namespace server
     void changegamespeed(int val, clientinfo *ci = NULL)
     {
         val = clamp(val, 10, 1000);
-        if(val!=100 && m_ctf) loopv(clients) clients[i]->_xi.flagrunvalid = false;
+        if(val!=100 && m_ctf) loopv(clients) clients[i]->_xi.lasttakeflag = 0;
         if(gamespeed==val) return;
         gamespeed = val;
         sendf(-1, 1, "riii", N_GAMESPEED, gamespeed, ci ? ci->clientnum : -1);
@@ -2480,8 +2482,6 @@ namespace server
         }
 
         if(smode) smode->setup();
-
-        _nodamage = disabledamage > 0 ? disabledamage : 0;
     }
 
     void rotatemap(bool next)
@@ -2615,8 +2615,8 @@ namespace server
 
     void _printbest(vector<clientinfo *> &best, int besti, char *msg)
     {
-        int l = min(best.length(), 2);
-        for(int i = 0; i < l; i++)
+        int l = min(best.length(), 3);
+        loopi(l)
         {
             concatstring(msg, colorname(best[i]), MAXTRANS);
             if(i + 1 < l) concatstring(msg, ", ", MAXTRANS);
@@ -2633,23 +2633,38 @@ namespace server
             if(smode) smode->intermission();
             changegamespeed(100);
             interm = gamemillis + int(serverintermission*1000.0);
-            if(beststats && clients.length())
+            if(beststats && clients.length() > 1)
             {
                 vector<clientinfo *> best;
                 int besti;
                 char msg[MAXTRANS];
 
-                copystring(msg, "\f1[BEST STATS] frags: \f7", MAXTRANS);
-                _BESTSTAT(frags)
+                // Firstly put normal kills statuses
+                // Best kills
+                copystring(msg, "\f0Best kills: \f1frags: \f7", MAXTRANS);
+                _BESTSTAT(frags);
                 _printbest(best, besti, msg);
 
-                concatstring(msg, " deaths: \f7", MAXTRANS);
-                _BESTSTAT(deaths)
-                _printbest(best, besti, msg);
+                // Most deaths (this isn't actually good :))
+                _BESTSTAT(deaths);
+                if(besti)
+                {
+                    concatstring(msg, " deaths: \f7", MAXTRANS);
+                    _printbest(best, besti, msg);
+                }
 
+                //Most suicides
+                _BESTSTAT(_suicides);
+                if(besti)
+                {
+                    concatstring(msg, " suicides: \f7", MAXTRANS);
+                    _printbest(best, besti, msg);
+                }
+
+                // Most teamkills (also not good)
                 if(m_teammode)
                 {
-                    _BESTSTAT(teamkills)
+                    _BESTSTAT(teamkills);
                     if(besti)
                     {
                         concatstring(msg, " teamkills: \f7", MAXTRANS);
@@ -2657,35 +2672,150 @@ namespace server
                     }
                 }
 
-                concatstring(msg, " accuracy: \f7", MAXTRANS);
-
+                // Best kpd
                 best.setsize(0);
                 best.add(clients[0]);
-                besti = best[0]->state.damage*100/max(best[0]->state.shotdamage, 1);
+                {
+                    float bestf = float(best[0]->state.frags) / float(max(best[0]->state.deaths, 1));
+                    for(int i = 1; i < clients.length(); i++)
+                    {
+                        float currf = float(clients[i]->state.frags) / float(max(clients[i]->state.deaths, 1));
+                        if(currf > bestf)
+                        {
+                            best.setsize(0);
+                            best.add(clients[i]);
+                            bestf = currf;
+                        }
+                        else if(currf == bestf)
+                        {
+                            best.add(clients[i]);
+                        }
+                    }
+
+                    if(bestf >= 0.01f || bestf <= -0.01f)   //non 0
+                    {
+                        concatstring(msg, " kpd: \f7", MAXTRANS);
+
+                        int l = min(best.length(), 3);
+                        loopi(l)
+                        {
+                            concatstring(msg, colorname(best[i]), MAXTRANS);
+                            if(i + 1 < l) concatstring(msg, ", ", MAXTRANS);
+                        }
+                        defformatstring(buf)(" \f1(\f0%.2f\f1)", bestf);
+                        concatstring(msg, buf, MAXTRANS);
+                    }
+                }
+
+                // Best accuracy
+                best.setsize(0);
+                best.add(clients[0]);
+                besti = best[0]->state.damage * 100 / max(best[0]->state.shotdamage, 1);
                 for(int i = 1; i < clients.length(); i++) if(!clients[i]->_xi.spy)
                 {
-                    if((clients[i]->state.damage*100/max(clients[i]->state.shotdamage, 1) > besti))
+                    int curri = clients[i]->state.damage * 100 / max(clients[i]->state.shotdamage, 1);
+                    if(curri > besti)
                     {
                         best.setsize(0);
                         best.add(clients[i]);
-                        besti = clients[i]->state.damage*100/max(clients[i]->state.shotdamage, 1);
+                        besti = curri;
                     }
-                    else if((clients[i]->state.damage*100/max(clients[i]->state.shotdamage, 1)) == besti)
+                    else if(curri == besti)
                     {
                         best.add(clients[i]);
                     }
                 }
-
-                int l = min(best.length(), 2);
-                loopi(l)
+                if(besti)
                 {
-                    concatstring(msg, colorname(best[i]), MAXTRANS);
-                    if(i + 1 < l) concatstring(msg, ", ", MAXTRANS);
-                }
-                defformatstring(buf)(" \f1(\f0%i%%\f1)", besti);
-                concatstring(msg, buf, MAXTRANS);
+                    concatstring(msg, " accuracy: \f7", MAXTRANS);
 
-                sendf(-1, 1, "ris", N_SERVMSG, msg);
+                    int l = min(best.length(), 3);
+                    loopi(l)
+                    {
+                        concatstring(msg, colorname(best[i]), MAXTRANS);
+                        if(i + 1 < l) concatstring(msg, ", ", MAXTRANS);
+                    }
+                    defformatstring(buf)(" \f1(\f0%i%%\f1)", besti);
+                    concatstring(msg, buf, MAXTRANS);
+                }
+
+                sendservmsg(msg);
+
+                // Print statuses for ctf modes
+                if(m_ctf)
+                {
+                    _BESTSTAT(flags);
+                    if(besti)
+                    {
+                        copystring(msg, "\f0Best flags: \f1scored: \f7", MAXTRANS);
+                        _printbest(best, besti, msg);
+                    }
+                    else msg[0] = 0;
+
+                    if(m_hold)
+                    {
+                        _BESTSTAT(_stolen);
+                        if(besti)
+                        {
+                            if(!msg[0])
+                                copystring(msg, "\f0Best flags:\f1", MAXTRANS);
+                            concatstring(msg, " taken: \f7", MAXTRANS);
+                            _printbest(best, besti, msg);
+                        }
+                    }
+                    else if(!m_protect)
+                    {
+                        _BESTSTAT(_stolen);
+                        if(besti)
+                        {
+                            if(!msg[0])
+                                copystring(msg, "\f0Best flags:\f1", MAXTRANS);
+                            concatstring(msg, " stolen: \f7", MAXTRANS);
+                            _printbest(best, besti, msg);
+                        }
+
+                        _BESTSTAT(_returned);
+                        if(besti)
+                        {
+                            if(!msg[0])
+                                copystring(msg, "\f0Best flags:\f1", MAXTRANS);
+                            concatstring(msg, " returned: \f7", MAXTRANS);
+                            _printbest(best, besti, msg);
+                        }
+                    }
+
+                    if(msg[0]) sendservmsg(msg);
+                }
+                else if(m_collect)
+                {
+                    _BESTSTAT(flags);
+                    if(besti)
+                    {
+                        copystring(msg, "\f0Best skulls: \f1scored: \f7", MAXTRANS);
+                        _printbest(best, besti, msg);
+                    }
+                    else msg[0] = 0;
+
+                    _BESTSTAT(_stolen);
+                    if(besti)
+                    {
+                        if(!msg[0])
+                                copystring(msg, "\f0Best skulls:\f1", MAXTRANS);
+                        concatstring(msg, " stolen: \f7", MAXTRANS);
+                        _printbest(best, besti, msg);
+                    }
+
+                    _BESTSTAT(_returned);
+                    if(besti)
+                    {
+                        if(!msg[0])
+                                copystring(msg, "\f0Best skulls:\f1", MAXTRANS);
+                        concatstring(msg, " returned: \f7", MAXTRANS);
+                        _printbest(best, besti, msg);
+                    }
+
+                    if(msg[0]) sendservmsg(msg);
+                }
             }
         }
     }
@@ -2710,6 +2840,9 @@ namespace server
             target->state.deaths++;
             int fragvalue = smode ? smode->fragvalue(target, actor) : (target==actor || isteam(target->team, actor->team) ? -1 : 1);
             actor->state.frags += fragvalue;
+            //zeromod
+            if(target==actor) target->state._suicides++;
+            ////
             if(fragvalue>0)
             {
                 int friends = 0, enemies = 0; // note: friends also includes the fragger
@@ -2744,6 +2877,9 @@ namespace server
         int fragvalue = smode ? smode->fragvalue(ci, ci) : -1;
         ci->state.frags += fragvalue;
         ci->state.deaths++;
+        //zeromod
+        ci->state._suicides++;
+        ////
         teaminfo *t = m_teammode ? teaminfos.access(ci->team) : NULL;
         if(t) t->frags += fragvalue;
         sendf(-1, 1, "ri5", N_DIED, ci->clientnum, ci->clientnum, gs.frags, t ? t->frags : 0);
@@ -3084,6 +3220,7 @@ namespace server
         aiman::clearai();
         persist = persistteams;
         if(_newflagrun) { _storeflagruns(); _newflagrun = 0; }
+        if(disabledamage>=0) _nodamage = disabledamage;
     }
 #if 0
     void localconnect(int n)
@@ -3209,7 +3346,6 @@ namespace server
     struct pbaninfo
     {
         enet_uint32 ip, mask;
-        time_t expire;
         char reason[80];
     };
     vector<pbaninfo> pbans;
@@ -3218,17 +3354,15 @@ namespace server
     {
         pbans.shrink(0);
     }
+    COMMAND(clearpbans, "");
 
     bool checkpban(uint ip)
     {
-        time_t currtime;
-        time(&currtime);
-        while(pbans.length() && pbans[0].expire <= currtime) pbans.remove(0);
         loopvrev(pbans) if((ip & pbans[i].mask) == pbans[i].ip) return true;
         return false;
     }
 
-    void addpban(const char *name, time_t expire, const char *reason)
+    void addpban(const char *name, const char *reason)
     {
         pbaninfo b;
         union { uchar b[sizeof(enet_uint32)]; enet_uint32 i; } ip, mask;
@@ -3245,14 +3379,11 @@ namespace server
         }
         b.ip = ip.i;
         b.mask = mask.i;
-        b.expire = expire;
-        filtertext(b.reason, reason, true, 80);
-        time_t currtime;
-        time(&currtime);
-        while(pbans.length() && pbans[0].expire <= currtime) pbans.remove(0);
-        loopv(pbans) if(expire < pbans[i].expire) { pbans.insert(i, b); return; }
+        if(reason) filtertext(b.reason, reason, true, 80);
+        else b.reason[0] = 0;
         pbans.add(b);
     }
+    COMMAND(addpban, "ss");
 
     int allowconnect(clientinfo *ci, const char *pwd = "")
     {
@@ -3422,6 +3553,7 @@ namespace server
         if(maxsendmap >= 0 && len > maxsendmap*1024*1024 && ci->privilege < PRIV_ROOT)
         {
             sendf(sender, 1, "ris",
+                N_SERVMSG,
                 maxsendmap
                 ?"server rejected map because of size"
                 :"server has disabled /sendmap");
@@ -3487,6 +3619,7 @@ namespace server
 
         {
             unsigned int t;
+            memset(_hp.args, 0, sizeof(_hp));
             _hp.args[0] = &ci->clientnum;
             _hp.args[1] = (void *)colorname(ci);
             t = getclientip(ci->clientnum);
@@ -4245,6 +4378,7 @@ namespace server
                 if(*s == *p)
                 {
                     _notify("\f3[FAIL] Invalid module name", ci);
+                    if(!ci) logoutf("\f3[FAIL] Invalid module name");
                     return;
                 }
             }
@@ -4289,7 +4423,8 @@ namespace server
                     if(ret)
                     {
                         defformatstring(msg)("\f1[WARN] \f3Plugin \f0%s \f3reinitialization function failed \f2(%s)", m->name, ret);
-                        _notify(msg, ci, PRIV_ADMIN);
+                        _notify(msg, ci, PRIV_ROOT);
+                        logoutf("%s", msg);
                     }
                     else
                     {
@@ -4311,7 +4446,8 @@ namespace server
                     if(ret)
                     {
                         defformatstring(msg)("\f1[WARN] \f3Plugin \f0%s \f3uninitialization function failed \f2(%s)", m->name, ret);
-                        _notify(msg, ci, PRIV_ADMIN);
+                        _notify(msg, ci, PRIV_ROOT);
+                        logoutf("%s", msg);
                     }
                 }
                 Z_FREELIB(m->h);
@@ -4325,7 +4461,8 @@ namespace server
             if(!m->h)
             {
                 defformatstring(msg)("\f3[WARN] Plugin \f0%s \f3loading failed \f2(%s)", argv[0], z_liberror());
-                _notify(msg, ci, PRIV_ADMIN);
+                _notify(msg, ci, PRIV_ROOT);
+                logoutf("%s", msg);
                 _modules.remove(mi);
                 return;
             }
@@ -4335,7 +4472,8 @@ namespace server
             if(!initfunc)
             {
                 defformatstring(msg)("\f3[FAIL] Plugin \f0%s \f3symbol \f0z_init \f3lookup failed \f2(%s)", argv[0], z_liberror());
-                _notify(msg, ci, PRIV_ADMIN);
+                _notify(msg, ci, PRIV_ROOT);
+                logoutf("%s", msg);
                 Z_FREELIB(m->h);
                 _modules.remove(mi);
                 return;
@@ -4348,7 +4486,8 @@ namespace server
             if(ret)
             {
                 defformatstring(msg)("\f3[WARN] Plugin \f0%s \f3initialization function failed \f2(%s)", argv[0], ret);
-                _notify(msg, ci, PRIV_ADMIN);
+                _notify(msg, ci, PRIV_ROOT);
+                logoutf("%s", msg);
                 Z_FREELIB(m->h);
                 _modules.remove(mi);
                 return;
@@ -4769,7 +4908,7 @@ namespace server
         int cn = atoi(argv[0]);
         if(!cn && strcmp(argv[0], "0"))
         {
-            if(ci) sendf(ci->clientnum, 1, "ris", "\f3Such client number not found");
+            if(ci) sendf(ci->ownernum, 1, "ris", N_SERVMSG, "\f3Such client number not found");
             else logoutf("_ban:%s isnt cn", argv[0]);
             return;
         }
@@ -4777,7 +4916,7 @@ namespace server
         uint ip = getclientip(cn);
         if(!cx || !ip)
         {
-            if(ci) sendf(ci->clientnum, 1, "ris", "\f3Such client number not found");
+            if(ci) sendf(ci->clientnum, 1, "ris", N_SERVMSG, "\f3Such client number not found");
             else logoutf("_ban:no such cn");
             return;
         }
@@ -4790,8 +4929,11 @@ namespace server
 
         int t;
 
-        defformatstring(msg)("\f3[BAN] \f5%i.%i.%i.%i is banned for %s", ip&0xFF, (ip>>8)&0xFF, (ip>>16)&0xFF, (ip>>24)&0xFF,
-                             (argv[1]&&argv[1][0])?argv[1]:"4h");
+        const char *address = getclienthostname(cn);
+
+        defformatstring(msg)("\f3[BAN] \f7%s \f1is banned for \f7%s",
+                             address ? address : "(null)",
+                             (argv[1]&&argv[1][0]) ? argv[1] : "4h");
 
         if(argv[1] && argv[1][0])
         {
@@ -4801,12 +4943,12 @@ namespace server
             int m;
             switch(*z)
             {
-                case 's': m = 1000; break;
-                case 'm': case 'M': m = 60000; break;
-                case 'h': case 'H': case 0: m = 60*60000; break;
-                case 'd': case 'D': m = 24*60*60000; break;
+                case 's': m = 1000; break;                          //seconds
+                case 'm': case 'M': m = 60000; break;               //minutes
+                case 'h': case 'H': case 0: m = 60*60000; break;    //hours
+                case 'd': case 'D': m = 24*60*60000; break;         //days
                 default:
-                    if(ci) sendf(ci->clientnum, 1, "ris", "\f3Unknown time specification");
+                    if(ci) sendf(ci->clientnum, 1, "ris", N_SERVMSG, "\f3Unknown time specification");
                     else logoutf("_ban:unknown time %s", argv[1]);
                     return;
             }
@@ -4817,7 +4959,7 @@ namespace server
                 t = atoi(argv[1]);
                 if(!t)
                 {
-                    if(ci) sendf(ci->clientnum, 1, "ris", "\f3Unknown time specification");
+                    if(ci) sendf(ci->clientnum, 1, "ris", N_SERVMSG, "\f3Unknown time specification");
                     else logoutf("_ban:unknown time %s", argv[1]);
                     return;
                 }
@@ -4951,7 +5093,7 @@ namespace server
         char *argv[32];
         int cnc;
         string buf;
-        string msg;
+        char msg[MAXTRANS];
 
         if(args) copystring(buf, args);
         else buf[0]=0;
@@ -4995,38 +5137,46 @@ namespace server
             }
         }
 
+        //buf is no longer used
+
         int sendcn = ci ? ci->clientnum : -1;
         loopv(cns)
         {
             clientinfo *cx = cns[i];
-            if(!m_teammode)
+
+            formatstring(msg)("\f0[stats:\f7%s\f0] \f1frags: \f0%i \f1deaths: \f0%i \f1suicides: \f0%i \f1kpd: \f0%.2f \f1acc: \f0%i%%",
+                colorname(cx), cx->state.frags, cx->state.deaths, cx->state._suicides,
+                (float(cx->state.frags)/float(max(cx->state.deaths, 1))), cx->state.damage*100/max(cx->state.shotdamage,1));
+
+            if(m_teammode)
             {
-                formatstring(msg)("\f1[STATS:\f7%s\f1] \f2kills:\f0%i \f2deaths:\f0%i \f2kpd:\f0%.3f \f2acc:\f0%i%%",
-                    colorname(cx), cx->state.frags, cx->state.deaths,
-                    (float(cx->state.frags)/float(max(cx->state.deaths, 1))),
-                    (cx->state.damage*100/max(cx->state.shotdamage,1)));
+                formatstring(buf)(" \f1tk: \f0%i", cx->state.teamkills);
+                concatstring(msg, buf, MAXTRANS);
+
+                if(m_ctf)
+                {
+                    formatstring(buf)(" \f1flags scored: \f0%i", cx->state.flags);
+                    concatstring(msg, buf, MAXTRANS);
+
+                    if(m_hold)
+                    {
+                        formatstring(buf)(" \f1taken: \f0%i", cx->state._stolen);
+                        concatstring(msg, buf, MAXTRANS);
+                    }
+                    else if(!m_protect)
+                    {
+                        formatstring(buf)(" \f1stolen: \f0%i \f1returned: \f0%i", cx->state._stolen, cx->state._returned);
+                        concatstring(msg, buf, MAXTRANS);
+                    }
+                }
+                else if(m_collect)
+                {
+                    formatstring(buf)(" \f1skulls scored: \f0%i \f1stolen: \f0%i \f1returned: \f0%i",
+                        cx->state.flags, cx->state._stolen, cx->state._returned);
+                    concatstring(msg, buf, MAXTRANS);
+                }
             }
-            else if(m_ctf || m_protect || m_hold)
-            {
-                formatstring(msg)("\f1[STATS:\f7%s\f1] \f2flags:\f0%i \f2kills:\f0%i \f2deaths:\f0%i \f2tk:\f0%i \f2kpd:\f0%.3f \f2acc:\f0%i%%",
-                    colorname(cx), cx->state.flags, cx->state.frags, cx->state.deaths,
-                    cx->state.teamkills, (float(cx->state.frags)/float(max(cx->state.deaths, 1))),
-                    (cx->state.damage*100/max(cx->state.shotdamage,1)));
-            }
-            else if(m_collect)
-            {
-                formatstring(msg)("\f1[STATS:\f7%s\f1] \f2skulls:\f0%i \f2kills:\f0%i \f2deaths:\f0%i \f2tk:\f0%i \f2kpd:\f0%.3f \f2acc:\f0%i%%",
-                    colorname(cx), cx->state.tokens, cx->state.frags, cx->state.deaths,
-                    cx->state.teamkills, (float(cx->state.frags)/float(max(cx->state.deaths, 1))),
-                    (cx->state.damage*100/max(cx->state.shotdamage,1)));
-            }
-            else
-            {
-                formatstring(msg)("\f1[STATS:\f7%s\f1] \f2kills:\f0%i \f2deaths:\f0%i \f2tk:\f0%i \f2kpd:\f0%.3f \f2acc:\f0%i%%",
-                    colorname(cx), cx->state.frags, cx->state.deaths,
-                    cx->state.teamkills, (float(cx->state.frags)/float(max(cx->state.deaths, 1))),
-                    (cx->state.damage*100/max(cx->state.shotdamage,1)));
-            }
+
             sendf(sendcn, 1, "ris", N_SERVMSG, msg);
         }
     }
@@ -5240,7 +5390,7 @@ namespace server
         {
             loopv(_funcs) if(_funcs[i] && !strcmp(argv[k], _funcs[i]->name))
             {
-                _funcs[i]->disabled = val;
+                _funcs[i]->disabled = !val;
                 break;
             }
         }
@@ -6226,7 +6376,6 @@ namespace server
                     resetitems();
                     notgotitems = false;
                     if(smode) smode->newmap();
-                    _nodamage = disabledamage >= 0 ? disabledamage : 0;
                     loopv(clients)
                     {
                         clientinfo &cx = *clients[i];
