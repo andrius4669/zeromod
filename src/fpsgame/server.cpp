@@ -4413,8 +4413,10 @@ namespace server
             if(needload)
             {
                 if(!needunload) return;
+                typedef char *(* retinitfunctype)();
                 char *(*reinitfunc)();
-                *(Z_LIBFUNC *)(&reinitfunc) = Z_GETSYM(m->h, "z_reinit");
+                //*(Z_LIBFUNC *)(&reinitfunc) = Z_GETSYM(m->h, "z_reinit");
+                reinitfunc = (retinitfunctype)Z_GETSYM(m->h, "z_reinit");
                 if(reinitfunc)
                 {
                     char *ret;
@@ -4437,7 +4439,9 @@ namespace server
             {
                 //_debug("unloading");
                 char *(*uninitfunc)();
-                *(Z_LIBFUNC *)(&uninitfunc) = Z_GETSYM(m->h, "z_uninit");
+                typedef char *(* uninitfunctype)();
+                //*(Z_LIBFUNC *)(&uninitfunc) = Z_GETSYM(m->h, "z_uninit");
+                uninitfunc = (uninitfunctype)Z_GETSYM(m->h, "z_uninit");
                 if(uninitfunc)
                 {
                     char *ret;
@@ -4468,7 +4472,9 @@ namespace server
             }
 
             char *(*initfunc)(void *, void *, char *);
-            *(Z_LIBFUNC *)(&initfunc) = Z_GETSYM(m->h, "z_init");
+            // *(Z_LIBFUNC *)(&initfunc) = Z_GETSYM(m->h, "z_init");
+            typedef char *(* initfunctype)(void *, void *, char *);
+            initfunc = (initfunctype)Z_GETSYM(m->h, "z_init");
             if(!initfunc)
             {
                 defformatstring(msg)("\f3[FAIL] Plugin \f0%s \f3symbol \f0z_init \f3lookup failed \f2(%s)", argv[0], z_liberror());
