@@ -1,6 +1,6 @@
 
-CFLAGS= -O0 -g -pipe -fstack-protector
-CXXFLAGS= -O0 -g -pipe -fstack-protector
+CFLAGS= -O2 -g -pipe -fstack-protector
+CXXFLAGS= -O2 -g -pipe -fstack-protector
 
 override CXXFLAGS+= -Wall -fsigned-char -fno-exceptions -fno-rtti
 

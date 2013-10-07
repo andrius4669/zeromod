@@ -3618,12 +3618,12 @@ namespace server
         if(m_demo) setupdemoplayback();
 
         {
-            unsigned int t;
             memset(_hp.args, 0, sizeof(_hp));
             _hp.args[0] = &ci->clientnum;
             _hp.args[1] = (void *)colorname(ci);
-            t = getclientip(ci->clientnum);
-            _hp.args[2] = &t;
+            unsigned int ip = getclientip(ci->clientnum);
+            _hp.args[2] = &ip;
+            _hp.args[3] = (void *)getclienthostname(ci->clientnum);
             _exechook("connected");
         }
 
