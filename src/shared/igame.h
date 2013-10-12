@@ -107,9 +107,7 @@ namespace server
     extern void recordpacket(int chan, void *data, int len);
     extern void parsepacket(int sender, int chan, packetbuf &p);
     extern void sendservmsg(const char *s);
-    //zeromod
     extern void sendservmsgf(const char *fmt, ...);
-    ////
     extern bool sendpackets(bool force = false);
     extern void serverinforeply(ucharbuf &req, ucharbuf &p);
     extern void serverupdate();
@@ -119,9 +117,9 @@ namespace server
     extern int serverport(int infoport = -1);
     extern const char *defaultmaster();
     extern int masterport();
-    extern void processmasterinput(const char *cmd, int cmdlen, const char *args);
-    extern void masterconnected();
-    extern void masterdisconnected();
+    extern void processmasterinput(int i, const char *cmd, int cmdlen, const char *args);
+    extern void masterconnected(int i);
+    extern void masterdisconnected(int i);
     extern bool ispaused();
     extern int scaletime(int t);
 

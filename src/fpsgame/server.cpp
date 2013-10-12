@@ -272,6 +272,7 @@ namespace server
         void *authchallenge;
         int authkickvictim;
         char *authkickreason;
+        int authmaster;
         _extrainfo _xi;
 
 
@@ -369,6 +370,7 @@ namespace server
         void cleanauth(bool full = true)
         {
             authreq = 0;
+            authmaster = -1;
             if(authchallenge) { freechallenge(authchallenge); authchallenge = NULL; }
             if(full) cleanauthkick();
         }
@@ -577,7 +579,11 @@ namespace server
     int _newflagrun = 0;
     void _doflagrun(clientinfo *ci, int timeused)
     {
-        if(timeused <= 500) _cheater(ci, "flaghack", AC_FLAGHACK, 50);
+        if(timeused <= 500)
+        {
+            _cheater(ci, "flaghack", AC_FLAGHACK, 50);
+            return;
+        }
         if(serverflagruns)
         {
             _flagrun *fr = 0;
@@ -610,7 +616,7 @@ namespace server
             string msg;
             if(isbest) formatstring(msg)("\f0[flagrun] \f7%s \f2did flagrun in \f0%i.%02i seconds \f1(\f0best\f1)",
                 colorname(ci), timeused/1000, (timeused%1000)/10);
-            else formatstring(msg)("\f0[flagrun] \f7%s \f2did flagrun in \f0%i.%02i seconds \f1(\f0best: \f7%s \f2%i.%02i\f1)",
+            else formatstring(msg)("\f0[flagrun] \f7%s \f2did flagrun in \f0%i.%02i seconds \f1(\f0best: \f7%s \f6%i.%02i\f1)",
                 colorname(ci), timeused/1000, (timeused%1000)/10, fr->name, fr->timeused/1000, (fr->timeused%1000)/10);
             sendservmsg(msg);
         }
@@ -3116,7 +3122,7 @@ namespace server
                 if(c.state.aitype != AI_NONE) continue;
                 if(c.checkexceeded())
                 {
-                    _cheater(clients[i], "player position exceeded", AC_POSHACK, 100);
+                    _cheater(clients[i], "player velocity exceeded", AC_POSHACK, 100);
                     //disconnect_client(c.clientnum, DISC_MSGERR);
                 }
                 else c.scheduleexceeded();
@@ -3185,10 +3191,10 @@ namespace server
             formatstring(msg)("%s has modified map \"%s\"", colorname(ci), smapname);
             sendf(req, 1, "ris", N_SERVMSG, msg);
             if(req < 0)
-			{
-				ci->warned = true;
-				if(serverspecmod) _forcespectator(ci, serverspecmod);
-			}
+            {
+                ci->warned = true;
+                if(serverspecmod) _forcespectator(ci, serverspecmod);
+            }
         }
         if(crcs.empty() || crcs.length() < 2) return;
         loopv(crcs)
@@ -3201,10 +3207,10 @@ namespace server
                 formatstring(msg)("%s has modified map \"%s\"", colorname(ci), smapname);
                 sendf(req, 1, "ris", N_SERVMSG, msg);
                 if(req < 0)
-				{
-					ci->warned = true;
-					if(serverspecmod) _forcespectator(ci, serverspecmod);
-				}
+                {
+                    ci->warned = true;
+                    if(serverspecmod) _forcespectator(ci, serverspecmod);
+                }
             }
         }
     }
@@ -3286,38 +3292,26 @@ namespace server
     struct gbaninfo
     {
         enet_uint32 ip, mask;
+        int master;
     };
     vector<gbaninfo> gbans;
 
-    void cleargbans()
+    void cleargbans(int master = -1)
     {
-        gbans.shrink(0);
+        if(master < 0) gbans.shrink(0);
+        else
+        {
+            loopvrev(gbans) if(gbans[i].master == master) gbans.remove(i);
+        }
     }
 
     bool checkgban(uint ip)
     {
-        loopv(gbans) if((ip & gbans[i].mask) == gbans[i].ip)
-        {
-            switch(servercheckgbans)
-            {
-                case 1: return true;
-                default:
-                {
-                    bool hasadmin = false;
-                    defformatstring(msg)("\f3[GBAN] \f0gbanned client \f5(%i.%i.%i.%i)", ip&0xFF, (ip>>8)&0xFF, (ip>>16)&0xFF, (ip>>24)&0xFF);
-                    loopv(clients) if(clients[i]->privilege>=PRIV_ADMIN)
-                    {
-                        hasadmin = true;
-                        sendf(clients[i]->clientnum, 1, "ris", N_SERVMSG, msg);
-                    }
-                    return (servercheckgbans==0) ? false : (!hasadmin);
-                }
-            }
-        }
+        loopv(gbans) if((ip & gbans[i].mask) == gbans[i].ip) return true;
         return false;
     }
 
-    void addgban(const char *name)
+    void addgban(int master, const char *name)
     {
         union { uchar b[sizeof(enet_uint32)]; enet_uint32 i; } ip, mask;
         ip.i = 0;
@@ -3334,6 +3328,7 @@ namespace server
         gbaninfo &ban = gbans.add();
         ban.ip = ip.i;
         ban.mask = mask.i;
+        ban.master = master;
 
         loopvrev(clients)
         {
@@ -3384,7 +3379,22 @@ namespace server
         pbans.add(b);
     }
     COMMAND(addpban, "ss");
+/*
+    struct reservedname
+    {
+        bool sensitive;
+        char name[MAXNAMELEN+1];
+    };
+    vector<reservedname> reservednames;
 
+    bool nameprotection(const char *name)
+    {
+        loopvrev(reservednames)
+            if(reservednames[i].sensitive ? (!strcmp(name, reservednames[i].name)) : (!strcasecmp(name, reservednames[i].name)))
+                return true;
+        return false;
+    }
+*/
     int allowconnect(clientinfo *ci, const char *pwd = "")
     {
         if(serverpass[0])
@@ -3400,6 +3410,7 @@ namespace server
         if(checkgban(ip)) return DISC_IPBAN;
         if(checkpban(ip)) return DISC_IPBAN;
         if(mastermode>=MM_PRIVATE && allowedips.find(ip)<0) return DISC_PRIVATE;
+        //if(nameprotection(ci->name)) return DISC_PASSWORD;
         return DISC_NONE;
     }
 
@@ -3415,38 +3426,61 @@ namespace server
         return NULL;
     }
 
+    // finds local authkey and sends challenge to client
+    // returns true on success and false on failure
+    inline bool challengeauth(clientinfo *ci)
+    {
+        userinfo *u = users.access(userkey(ci->authname, ci->authdesc));
+        if(u)
+        {
+            uint seed[3] = { ::hthash(serverauth) + detrnd(size_t(ci) + size_t(ci->authname) + size_t(ci->authdesc), 0x10000), uint(totalmillis), randomMT() };
+            vector<char> buf;
+            ci->authchallenge = genchallenge(u->pubkey, seed, sizeof(seed), buf);
+            sendf(ci->clientnum, 1, "risis", N_AUTHCHAL, ci->authdesc, ci->authreq, buf.getbuf());
+            return true;
+        }
+        else return false;
+    }
+
+    // executed then auth server failed to authenticate user
     void authfailed(clientinfo *ci)
     {
-        if(!ci) return;
-        ci->cleanauth();
-        if(ci->connectauth) disconnect_client(ci->clientnum, ci->connectauth);
+        // we failed in this auth server, check for other posibilities
+        bool found = false;
+        for(int authmaster = findauthmaster(ci->authdesc, ci->authmaster); authmaster >= 0; authmaster = findauthmaster(ci->authdesc, authmaster))
+            if(requestmasterf(authmaster, "reqauth %u %s\n", ci->authreq, ci->authname))
+            {
+                ci->authmaster = authmaster;
+                found = true;
+                break;
+            }
+        // no more suitable auth servers?
+        if(!found)
+        {
+            // we are doomed
+            ci->cleanauth();
+            if(ci->connectauth) disconnect_client(ci->clientnum, ci->connectauth);
+        }
     }
 
-    void authfailed(uint id)
+    // auth server successfully authenticated user
+    void authsucceeded(clientinfo *ci)
     {
-        authfailed(findauth(id));
-    }
-
-    void authsucceeded(uint id)
-    {
-        clientinfo *ci = findauth(id);
-        if(!ci) return;
         ci->cleanauth(ci->connectauth!=0);
         if(ci->connectauth && !ci->connected) connected(ci);
         if(ci->authkickvictim >= 0)
         {
             if(setmaster(ci, true, "", ci->authname, NULL, PRIV_AUTH, false, true))
-                trykick(ci, ci->authkickvictim, ci->authkickreason, ci->authname, NULL, PRIV_AUTH);
+                trykick(ci, ci->authkickvictim, ci->authkickreason, ci->authname, ci->authdesc, PRIV_AUTH);
             ci->cleanauthkick();
         }
-        else setmaster(ci, true, "", ci->authname, NULL, PRIV_AUTH);
+        else setmaster(ci, true, "", ci->authname, ci->authdesc, PRIV_AUTH);
     }
 
-    void authchallenged(uint id, const char *val, const char *desc = "")
+    // auth server sent challenge to user
+    void authchallenged(clientinfo *ci, const char *val, const char *desc = "")
     {
-        clientinfo *ci = findauth(id);
-        if(!ci) return;
-        sendf(ci->clientnum, 1, "risis", N_AUTHCHAL, desc, id, val);
+        sendf(ci->clientnum, 1, "risis", N_AUTHCHAL, desc, ci->authreq, val);
     }
 
     uint nextauthreq = 0;
@@ -3458,36 +3492,46 @@ namespace server
         ci->authreq = nextauthreq++;
         filtertext(ci->authname, user, false, 100);
         copystring(ci->authdesc, desc);
-        if(ci->authdesc[0])
+
+        // firstly check for local authkeys
+        if(!ci->authdesc[0] || !challengeauth(ci))
         {
-            userinfo *u = users.access(userkey(ci->authname, ci->authdesc));
-            if(u)
+            // no local authkeys found, search for suitable auth server
+            for(int authmaster = findauthmaster(ci->authdesc); authmaster >= 0; authmaster = findauthmaster(ci->authdesc, authmaster))
             {
-                uint seed[3] = { ::hthash(serverauth) + detrnd(size_t(ci) + size_t(user) + size_t(desc), 0x10000), uint(totalmillis), randomMT() };
-                vector<char> buf;
-                ci->authchallenge = genchallenge(u->pubkey, seed, sizeof(seed), buf);
-                sendf(ci->clientnum, 1, "risis", N_AUTHCHAL, desc, ci->authreq, buf.getbuf());
+                if(requestmasterf(authmaster, "reqauth %u %s\n", ci->authreq, ci->authname))
+                {
+                    // this server seems to work, use it for auth
+                    ci->authmaster = authmaster;
+                    break;
+                }
             }
-            else ci->cleanauth();
+            // we found 0 suitable auth servers?
+            if(ci->authmaster < 0)
+            {
+                // cleanup
+                ci->cleanauth();
+                // warn user
+                if(!ci->authdesc[0])
+                    sendf(ci->clientnum, 1, "ris", N_SERVMSG, "not connected to authentication server");
+            }
         }
-        else if(!requestmasterf("reqauth %u %s\n", ci->authreq, ci->authname))
-        {
-            ci->cleanauth();
-            sendf(ci->clientnum, 1, "ris", N_SERVMSG, "not connected to authentication server");
-        }
+
         if(ci->authreq) return true;
         if(ci->connectauth) disconnect_client(ci->clientnum, ci->connectauth);
         return false;
     }
 
-    void masterconnected() {}
+    void masterconnected(int m)
+    {
+    }
 
-    void masterdisconnected()
+    void masterdisconnected(int m)
     {
         loopvrev(clients)
         {
             clientinfo *ci = clients[i];
-            if(ci->authreq) authfailed(ci);
+            if(ci->authreq && ci->authmaster == m) authfailed(ci);
         }
     }
 
@@ -3502,7 +3546,30 @@ namespace server
         {
             if(!isxdigit(*s)) { *s = '\0'; break; }
         }
-        if(desc[0])
+
+        // masterserver auth
+        if(ci->authmaster >= 0)
+        {
+            if(!requestmasterf(ci->authmaster, "confauth %u %s\n", id, val))
+            {
+                // auth server seems to be disconnected, so find another one
+                bool found = false;
+                for(int authmaster = findauthmaster(ci->authdesc, ci->authmaster); authmaster >= 0; authmaster = findauthmaster(ci->authdesc, authmaster))
+                    if(requestmasterf(authmaster, "reqauth %u %s\n", ci->authreq, ci->authname))
+                    {
+                        ci->authmaster = authmaster;
+                        found = true;
+                        break;
+                    }
+                // no suitable auth servers found?
+                if(!found)
+                {
+                    ci->cleanauth();
+                    if(!ci->authdesc[0]) sendf(ci->clientnum, 1, "ris", N_SERVMSG, "not connected to authentication server");
+                }
+            }
+        }
+        else
         {
             if(ci->authchallenge && checkchallenge(val, ci->authchallenge))
             {
@@ -3520,28 +3587,34 @@ namespace server
             }
             ci->cleanauth();
         }
-        else if(!requestmasterf("confauth %u %s\n", id, val))
-        {
-            ci->cleanauth();
-            sendf(ci->clientnum, 1, "ris", N_SERVMSG, "not connected to authentication server");
-        }
+
         return ci->authreq || !ci->connectauth;
     }
 
-    void processmasterinput(const char *cmd, int cmdlen, const char *args)
+    void processmasterinput(int i, const char *cmd, int cmdlen, const char *args)
     {
         uint id;
         string val;
+        clientinfo *ci;
         if(sscanf(cmd, "failauth %u", &id) == 1)
-            authfailed(id);
+        {
+            ci = findauth(id);
+            if(ci && ci->authmaster == i) authfailed(ci);
+        }
         else if(sscanf(cmd, "succauth %u", &id) == 1)
-            authsucceeded(id);
+        {
+            ci = findauth(id);
+            if(ci && ci->authmaster == i) authsucceeded(ci);
+        }
         else if(sscanf(cmd, "chalauth %u %255s", &id, val) == 2)
-            authchallenged(id, val);
+        {
+            ci = findauth(id);
+            if(ci && ci->authmaster == i) authchallenged(ci, val, ci->authdesc);
+        }
         else if(!strncmp(cmd, "cleargbans", cmdlen))
-            cleargbans();
+            cleargbans(i);
         else if(sscanf(cmd, "addgban %100s", val) == 1)
-            addgban(val);
+            addgban(i, val);
     }
 
     VAR(maxsendmap, -1, 4, 1024);
@@ -3559,7 +3632,7 @@ namespace server
                 :"server has disabled /sendmap");
             return;
         }
-        if(ci->_xi.editmute)
+        if(ci->_xi.editmute && !ci->privilege)
         {
             sendf(sender, 1, "ris", N_SERVMSG, "\f5[MUTE] \f3Your sendmap was muted");
             return;
@@ -3629,9 +3702,9 @@ namespace server
 
         if(servermotd[0]) sendf(ci->clientnum, 1, "ris", N_SERVMSG, servermotd);
 
+        // automatically change master mode to auth if certain client count reached
         if(publicserver != 1 && autolockmaster && numclients(-1, false) >= autolockmaster) mastermask &= ~MM_AUTOAPPROVE;
     }
-
 
 // **************************    ZEROMOD     **********************************************
     void _privfail(clientinfo *ci);
@@ -5219,8 +5292,8 @@ namespace server
         uint t, months, weeks, days, hours, minutes, seconds;
 
         copystring(msg,
-            "\f5[INFO] \f7Cube 2: Sauerbraten \f2server modification \f7zeromod \f2(based on original server)\n"
-            "\f5[INFO] \f7Contributors: \f0/dev/zero, ~Haytham");
+            "\f5[INFO] \f7Cube 2: Sauerbraten \f2server modification \f7zeromod \f2(based on original server)"
+            /*"\f5[INFO] \f7Contributors: \f0/dev/zero, ~Haytham"*/);
 
         sendf(ci ? ci->clientnum : -1, 1, "ris", N_SERVMSG, msg);
 
@@ -5248,11 +5321,7 @@ namespace server
 #   elif defined(__NetBSD__)
             "\f6NetBSD"
 #   elif defined(__sun) || defined(sun)
-#       if defined(__SVR4) || defined(__svr4__)
             "\f2Solaris"
-#       else
-            "\f2SunOS"
-#       endif
 #   elif defined(__DragonFly__)
             "\f0DragonFlyBSD"
 #   elif defined(__MACH__)
