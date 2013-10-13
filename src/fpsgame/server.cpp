@@ -2960,7 +2960,7 @@ namespace server
 
         if(gs.ammo[gun] <= 0)
         {
-            if(m_insta) _cheater(ci, "gunhack::noammo", AC_GUNHACK, 10);
+            if(m_insta && gs.state==CS_ALIVE) _cheater(ci, "gunhack::noammo", AC_GUNHACK, 10);
             return;
         }
 
