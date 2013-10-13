@@ -143,6 +143,7 @@ clean:
 $(SERVER_OBJS): CXXFLAGS += $(SERVER_INCLUDES)
 $(MASTER_OBJS): CXXFLAGS += $(MASTER_INCLUDES)
 
+# compilation and instalation for windows
 ifneq (,$(findstring MINGW,$(PLATFORM)))
 
 server: $(SERVER_OBJS)
@@ -152,7 +153,11 @@ server: $(SERVER_OBJS)
 master: $(MASTER_OBJS)
 	$(CXX) $(CXXFLAGS) -o $(WINBIN)/sauer_master.exe $(MASTER_OBJS) $(MASTER_LIBS)
 
-install: all
+install: install_server install_master
+install_server: server
+install_master: master
+
+# compilation and installation options for windows
 else
 
 server:	libenet $(SERVER_OBJS)
@@ -161,12 +166,22 @@ server:	libenet $(SERVER_OBJS)
 master: libenet $(MASTER_OBJS)
 	$(CXX) $(CXXFLAGS) -o sauer_master $(MASTER_OBJS) $(MASTER_LIBS)  
 
-install: all
+install: install_server install_master
+
+install_server: server
 	cp sauer_server	../bin_unix/$(PLATFORM_PREFIX)_server
 ifneq (,$(STRIP))
 	$(STRIP) ../bin_unix/$(PLATFORM_PREFIX)_server
 endif
+
+install_master: master
+	cp sauer_master ../bin_unix/$(PLATFORM_PREFIX)_master
+ifneq (,$(STRIP))
+	$(STRIP) ../bin_unix/$(PLATFORM_PREFIX)_master
 endif
+
+endif
+
 
 depend:
 	makedepend -a -o-standalone.o -Y -DSTANDALONE -Ishared -Iengine -Ifpsgame $(subst -standalone.o,.cpp,$(SERVER_OBJS))
