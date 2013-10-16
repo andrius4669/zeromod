@@ -3885,7 +3885,6 @@ namespace server
         _addmanpage("interm intermission", "", "Starts intermission");
         _addmanpage("ban", "cn [time]", "Bans client; time is in format: [num][ ][s/m/h/d]; by default, time is 4h; example: #ban 0 1d");
         _addmanpage("votekick", "cn", "Votes client kick");
-        _addmanpage("interm intermission", "", "Starts intermission");
         _addmanpage("rename name", "<cn> [name]", "Renames player");
         _addmanpage("listgbans showgbans", "", "Shows gbas list");
         _addmanpage("nodamage", "[1/0]", "Disables damage in coop edit mode");
@@ -5501,7 +5500,7 @@ namespace server
         _addfunc("spy", PRIV_ADMIN, _spyfunc);
         _addfunc("np", PRIV_NONE, _np);
         _addhiddenfunc("forgive fg", PRIV_NONE, _np);
-        _addfunc("interm intermission", PRIV_ADMIN, _interm);
+        _addfunc("interm intermission", PRIV_MASTER, _interm);
         _addfunc("ban", PRIV_ADMIN, _ban);
         _addfunc("votekick", PRIV_NONE, _votekickfunc);
         _addfunc("sendto", PRIV_MASTER, _sendto);
