@@ -416,6 +416,7 @@ extern void cleanragdoll(dynent *d);
 extern int maxclients;
 
 enum { DISC_NONE = 0, DISC_EOP, DISC_LOCAL, DISC_KICK, DISC_MSGERR, DISC_IPBAN, DISC_PRIVATE, DISC_MAXCLIENTS, DISC_TIMEOUT, DISC_OVERFLOW, DISC_PASSWORD, DISC_NUM };
+enum { PRIV_NONE = 0, PRIV_MASTER, PRIV_AUTH, PRIV_ADMIN, PRIV_ROOT };
 
 extern void *getclientinfo(int i);
 extern ENetPeer *getclientpeer(int i);
@@ -440,7 +441,9 @@ extern bool requestmaster(int i, const char *req);
 extern bool requestmasterf(int i, const char *fmt, ...) PRINTFARGS(2, 3);
 extern bool isdedicatedserver();
 
+// zeromod
 extern int findauthmaster(const char *desc, int prev = -1);
+extern bool usemastergbans(int master);
 
 // client
 extern void sendclientpacket(ENetPacket *packet, int chan);

@@ -1698,7 +1698,8 @@ namespace server
         {
             case 'r': case 'R': u.privilege = PRIV_ROOT; break;
             case 'a': case 'A': u.privilege = PRIV_ADMIN; break;
-            case 'n': case 'N': u.privilege = PRIV_NONE; break;
+            case 'c': case 'C': u.privilege = PRIV_MASTER; break;
+            // case 'n': case 'N': u.privilege = PRIV_NONE; break; // uncomment then nameprotection is done
             case 'm': case 'M': default: u.privilege = PRIV_AUTH; break;
         }
     }
@@ -3296,9 +3297,12 @@ namespace server
     };
     vector<gbaninfo> gbans;
 
-    void cleargbans(int master = -1)
+    void cleargbans(int master)
     {
-        if(master < 0) gbans.shrink(0);
+        if(master < 0)
+        {
+            loopvrev(gbans) if(gbans[i].master >= 0) gbans.remove(i);
+        }
         else
         {
             loopvrev(gbans) if(gbans[i].master == master) gbans.remove(i);
@@ -3612,9 +3616,13 @@ namespace server
             if(ci && ci->authmaster == i) authchallenged(ci, val, ci->authdesc);
         }
         else if(!strncmp(cmd, "cleargbans", cmdlen))
+        {
             cleargbans(i);
+        }
         else if(sscanf(cmd, "addgban %100s", val) == 1)
-            addgban(i, val);
+        {
+            if(usemastergbans(i)) addgban(i, val);
+        }
     }
 
     VAR(maxsendmap, -1, 4, 1024);
@@ -6525,7 +6533,7 @@ namespace server
                 if(desc[0])
                 {
                     userinfo *u = users.access(userkey(name, desc));
-                    if(u) authpriv = u->privilege; else break;
+                    if(u) authpriv = u->privilege; /*else break;*/
                 }
                 if(trykick(ci, victim, text, name, desc, authpriv, true) && tryauth(ci, name, desc))
                 {

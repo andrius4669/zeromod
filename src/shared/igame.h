@@ -125,5 +125,6 @@ namespace server
 
     //zeromod
     extern void serverclose();
+    extern void cleargbans(int master = -1);
 }
 

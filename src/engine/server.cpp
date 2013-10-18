@@ -408,17 +408,20 @@ struct masterinfo
     string mastername;
     int masterport;
 
+    int masterauthprivilege;
     int masterauth;
     string masterauthdesc;
-    //bool masterban;
+    bool masterban;
     bool masterreg;
 
     masterinfo():
         mastersock(ENET_SOCKET_NULL),
-        lastupdatemaster(0), lastconnectmaster(0), masterconnecting(0), masterconnected(0),
+        lastupdatemaster(0), lastconnectmaster(0),
+        masterconnecting(0), masterconnected(0),
         masteroutpos(0), masterinpos(0),
         masterport(server::masterport()),
-        masterauth(1), /*masterban(true),*/ masterreg(true)
+        masterauthprivilege(PRIV_AUTH),
+        masterauth(1), masterban(true), masterreg(true)
     {
         copystring(mastername, server::defaultmaster());
         masterauthdesc[0] = '\0';
@@ -436,6 +439,16 @@ int findauthmaster(const char *desc, int prev)
     for(int i = prev >= 0 ? prev + 1 : 0; i < masters.length(); i++)
         if(masters[i].masterauth && (!strcmp(desc, masters[i].masterauthdesc) || masters[i].masterauth >= 2)) return i;
     return -1;
+}
+
+bool usemastergbans(int master)
+{
+    return masters.inrange(master) ? masters[master].masterban : false;
+}
+
+int masterauthprivilege(int master)
+{
+    return masters.inrange(master) ? masters[master].masterauthprivilege : PRIV_NONE;
 }
 
 int currentmaster = -1;
@@ -472,6 +485,7 @@ ICOMMAND(resetmasters, "", (),
     disconnectmaster();
     masters.shrink(0);
     currentmaster = -1;
+    server::cleargbans();
 });
 
 void addmaster()
@@ -485,6 +499,7 @@ ICOMMAND(mastername, "s", (const char *s),
 {
     if(!masters.inrange(currentmaster)) addmaster();
     disconnectmaster(currentmaster);
+    server::cleargbans(currentmaster);
     copystring(masters[currentmaster].mastername, s);
 });
 
@@ -492,11 +507,13 @@ ICOMMAND(masterport, "i", (int *i),
 {
     if(!masters.inrange(currentmaster)) addmaster();
     disconnectmaster(currentmaster);
+    server::cleargbans(currentmaster);
     int masterport = clamp(*i, 0, 0xFFFF);
     masters[currentmaster].masterport = masterport ? masterport : server::masterport();
 });
 
 // use this masterserver for auth? (0 - no, 1 - yes, 2 - use for all auth desc)
+// note: your server may be banned if it regsiers but not use auth
 ICOMMAND(masterauth, "i", (int *i),
 {
     if(!masters.inrange(currentmaster)) addmaster();
@@ -510,6 +527,24 @@ ICOMMAND(masterauthdesc, "s", (const char *s),
     copystring(masters[currentmaster].masterauthdesc, s ? s : "");
 });
 
+// privileges of auth claims for this masterserver
+/*
+ICOMMAND(masterauthprivilege, "s", (char *s),
+{
+    if(!masters.inrange(currentmaster)) addmaster();
+    int priv;
+    switch(s[0])
+    {
+        case 'r': case 'R': priv = PRIV_ROOT; break;
+        case 'a': case 'A': priv = PRIV_ADMIN; break;
+        case 'c': case 'C': priv = PRIV_MASTER; break;
+        case 'n': case 'N': priv = PRIV_NONE; break;
+        case 'm': case 'M': default: priv = PRIV_AUTH; break;
+    }
+    masters[currentmaster].masterauthprivilege = priv;
+});
+*/
+
 // register to this masterserver?
 ICOMMAND(masterreg, "i", (int *i),
 {
@@ -517,14 +552,15 @@ ICOMMAND(masterreg, "i", (int *i),
     masters[currentmaster].masterreg = clamp(*i, 0, 1);
 });
 
-/*
-// use bans from this masterserver?
+// use gbans from this masterserver?
+// note: must be registered to server to use gbans from it
 ICOMMAND(masterban, "i", (int *i),
 {
-    if(masters.inrange(currentmaster)) addmaster();
-    masters[currentmaster].masterban = clamp(*i, 0, 1);
+    if(!masters.inrange(currentmaster)) addmaster();
+    int usebans = clamp(*i, 0, 1);
+    masters[currentmaster].masterban = usebans;
+    if(!usebans) server::cleargbans(currentmaster);
 });
-*/
 
 ENetSocket connectmaster(int i, bool wait)
 {
@@ -740,7 +776,7 @@ void updatemasterserver(int i)
 {
     if(!masters[i].masterconnected && masters[i].lastconnectmaster && totalmillis-masters[i].lastconnectmaster <= 5*60*1000) return;
     if(allowupdatemaster && masters[i].mastername[0] && masters[i].masterreg)
-        requestmasterf(i, "regserv %d\n", serverport); //warning: if not registered, master bans won't work
+        requestmasterf(i, "regserv %d\n", serverport); //warning: if not registered, master gbans won't work
     masters[i].lastupdatemaster = totalmillis ? totalmillis : 1;
 }
 

@@ -61,8 +61,8 @@ enum
 struct fpsentity : extentity
 {
     int triggerstate, lasttrigger;
-    
-    fpsentity() : triggerstate(TRIGGER_RESET), lasttrigger(0) {} 
+
+    fpsentity() : triggerstate(TRIGGER_RESET), lasttrigger(0) {}
 };
 
 enum { GUN_FIST = 0, GUN_SG, GUN_CG, GUN_RL, GUN_RIFLE, GUN_GL, GUN_PISTOL, GUN_FIREBALL, GUN_ICEBALL, GUN_SLIMEBALL, GUN_BITE, GUN_BARREL, NUMGUNS };
@@ -207,13 +207,11 @@ enum
     S_CHAINSAW_IDLE,
 
     S_HIT,
-    
+
     S_FLAGFAIL
 };
 
 // network messages codes, c2s, c2c, s2c
-
-enum { PRIV_NONE = 0, PRIV_MASTER, PRIV_AUTH, PRIV_ADMIN, PRIV_ROOT };
 
 enum
 {
@@ -495,7 +493,7 @@ struct fpsstate
         }
         else if(m_sp)
         {
-            if(m_dmsp) 
+            if(m_dmsp)
             {
                 armourtype = A_BLUE;
                 armour = 25;
@@ -839,7 +837,7 @@ namespace server
     extern int msgsizelookup(int msg);
     extern bool serveroption(const char *arg);
     extern bool delayspawn(int type);
-    
+
     //zeromod functions
     extern bool _readsnvars(const char *name, char *out, size_t s);
     extern int _getivars(const char *name);
