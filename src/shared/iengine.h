@@ -444,6 +444,7 @@ extern bool isdedicatedserver();
 // zeromod
 extern int findauthmaster(const char *desc, int prev = -1);
 extern bool usemastergbans(int master);
+extern int masterauthprivilege(int master);
 
 // client
 extern void sendclientpacket(ENetPacket *packet, int chan);

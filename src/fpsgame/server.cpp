@@ -3156,7 +3156,7 @@ namespace server
         static bool compare(const crcinfo &x, const crcinfo &y) { return x.matches > y.matches; }
     };
 
-	VAR(serverspecmod, 0, 0, 2);	//server spectates moded map owners: 0=no, 1=for this map only, 2=perm (saved in clientinfo)
+    VAR(serverspecmod, 0, 0, 2);    // server spectates moded map owners: 0=no, 1=for this map only, 2=perm (saved in clientinfo)
 
     void checkmaps(int req)
     {
@@ -3470,15 +3470,16 @@ namespace server
     // auth server successfully authenticated user
     void authsucceeded(clientinfo *ci)
     {
+        int priv = masterauthprivilege(ci->authmaster);
         ci->cleanauth(ci->connectauth!=0);
         if(ci->connectauth && !ci->connected) connected(ci);
         if(ci->authkickvictim >= 0)
         {
-            if(setmaster(ci, true, "", ci->authname, NULL, PRIV_AUTH, false, true))
-                trykick(ci, ci->authkickvictim, ci->authkickreason, ci->authname, ci->authdesc, PRIV_AUTH);
+            if(setmaster(ci, true, "", ci->authname, ci->authdesc, priv, false, true))
+                trykick(ci, ci->authkickvictim, ci->authkickreason, ci->authname, ci->authdesc, priv);
             ci->cleanauthkick();
         }
-        else setmaster(ci, true, "", ci->authname, ci->authdesc, PRIV_AUTH);
+        else setmaster(ci, true, "", ci->authname, ci->authdesc, priv);
     }
 
     // auth server sent challenge to user
@@ -3894,6 +3895,7 @@ namespace server
         _addmanpage("ban", "cn [time]", "Bans client; time is in format: [num][ ][s/m/h/d]; by default, time is 4h; example: #ban 0 1d");
         _addmanpage("votekick", "cn", "Votes client kick");
         _addmanpage("rename name", "<cn> [name]", "Renames player");
+        _addmanpage("time", "<minutes> [seconds]", "Sets remaining time");
         _addmanpage("listgbans showgbans", "", "Shows gbas list");
         _addmanpage("nodamage", "[1/0]", "Disables damage in coop edit mode");
     }
@@ -4885,6 +4887,60 @@ namespace server
         startintermission();
     }
 
+    void _timefunc(const char *cmd, const char *args, clientinfo *ci)
+    {
+        string buf;
+        char *argv[2];
+        copystring(buf, args);
+        _argsep(buf, 2, argv);
+
+        if((!argv[0] || !argv[0][0]) && (!argv[1] || !argv[1][0]))
+        {
+            _man("usage", cmd, ci);
+            return;
+        }
+
+        if(!m_timed || !smapname[0])
+        {
+            if(ci) sendf(ci->ownernum, 1, "ris", N_SERVMSG, "game mode is not timed");
+            return;
+        }
+
+        int gl = 0;
+
+        if(argv[0] && argv[0][0])
+            gl += atoi(argv[0]) * 60000;
+
+        if(argv[1] && argv[1][0])
+            gl += atoi(argv[1]) * 1000;
+
+        if(gl <= 1000 || gl > 48*60*60000 || gl + gamemillis <= 0 || gl + gamemillis + int(serverintermission*1000) <= 0)
+        {
+            if(!interm && gamemillis < gamelimit) startintermission();
+        }
+        else if(!interm && gamemillis < gamelimit)
+        {
+            gamelimit = gamemillis + gl;
+            int mins = gl / 60000;
+            int secs = (gl % 60000) / 1000;
+
+            string msg;
+            copystring(msg, "time remaining:");
+            if(mins > 0)
+            {
+                defformatstring(buf)(" %i minutes", mins);
+                concatstring(msg, buf);
+            }
+            if(secs > 0)
+            {
+                defformatstring(buf)(" %i seconds", secs);
+                concatstring(msg, buf);
+            }
+
+            sendf(-1, 1, "ri2is", N_TIMEUP, max((gamelimit - gamemillis)/1000, 1), N_SERVMSG, msg);
+        }
+    }
+
     void _rename(clientinfo *ci, const char *name, bool broadcast = true)
     {
         uchar buf[MAXSTRLEN];
@@ -5509,6 +5565,7 @@ namespace server
         _addfunc("np", PRIV_NONE, _np);
         _addhiddenfunc("forgive fg", PRIV_NONE, _np);
         _addfunc("interm intermission", PRIV_MASTER, _interm);
+        _addfunc("time", PRIV_MASTER, _timefunc);
         _addfunc("ban", PRIV_ADMIN, _ban);
         _addfunc("votekick", PRIV_NONE, _votekickfunc);
         _addfunc("sendto", PRIV_MASTER, _sendto);
