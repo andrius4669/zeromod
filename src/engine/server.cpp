@@ -488,12 +488,13 @@ ICOMMAND(resetmasters, "", (),
     server::cleargbans();
 });
 
-void addmaster()
+void addmaster(const char *s = NULL)
 {
     masters.add();
     currentmaster = masters.length() - 1;
+    if(s && s[0]) copystring(masters[currentmaster].mastername, s);
 }
-COMMAND(addmaster, "");
+ICOMMAND(addmaster, "s", (const char *s), addmaster(s));
 
 ICOMMAND(mastername, "s", (const char *s),
 {

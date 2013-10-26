@@ -7,8 +7,8 @@
 
 enum { PRIV_NONE = 0, PRIV_MASTER, PRIV_AUTH, PRIV_ADMIN, PRIV_ROOT };
 
-void *(* z_getext)(char *);
-void (* z_setext)(char *, void *);
+//void *(* z_getext)(char *);
+//void (* z_setext)(char *, void *);
 
 char dbfile[260]  = "GeoIP.dat";
 int dbfileset = 0;
@@ -20,17 +20,39 @@ struct hookparam
     void *args[16];
 } __attribute__((packed));
 
+
+typedef void *(* getexttype)(char *);
+typedef void (* setexttype)(char *, void *);
+typedef void (* notifyprivtype)(char *, int, int);
+typedef void (* debugtype)(char *);
+typedef void (* addhooktype)(char *, int (*hookfunc)(struct hookparam *));
+typedef void (* delhooktype)(char *, int (*hookfunc)(struct hookparam *));
+typedef void (* logoutftype)(const char *fmt, ...);
+
+/*
 //void *(* sendf)(int, int, char *, ...);
 void (*debug)(char *);
 void (*notifypriv)(char *, int, int);
 void (*addhook)(char *, int (*hookfunc)(struct hookparam *));
 void (*delhook)(char *, int (*hookfunc)(struct hookparam *));
+*/
+
+getexttype z_getext = NULL;
+setexttype z_setext = NULL;
+notifyprivtype notifypriv = NULL;
+debugtype debug = NULL;
+addhooktype addhook = NULL;
+delhooktype delhook = NULL;
+logoutftype logoutf = NULL;
 
 GeoIP *gi  = 0;
 GeoIP *gic = 0;
 
 int needcity = 1;
 int needregion = 0;
+
+int useunicode = 0;
+int banproxies = 0;
 
 int _argsep(char *str, int c, char **argv)
 {
@@ -60,6 +82,7 @@ int _argsep(char *str, int c, char **argv)
 //1 - name
 //2 - ip
 //3 - hostname
+//4 - ban?
 
 static char connmsg[260];
 static char ipaddr[16];
@@ -97,7 +120,15 @@ int on_connect(struct hookparam *hp)
     if(country) searchregion = searchcity = searchcountry = 0;  //do not do GeoIP lookup for reserved ip addresses
 
     //Get country name
-    if(searchcountry) country = GeoIP_country_name_by_addr(gi, addrp);
+    if(searchcountry)
+    {
+        country = GeoIP_country_name_by_addr(gi, addrp);
+        if(country && strstr(country, "proxy"))
+        {
+            searchcity = searchregion = 0;  //do not resolve cities and regions for proxies
+            if(banproxies && !hp->args[4]) hp->args[4] = (void *)country;   //set ban reason
+        }
+    }
 
     //Get city and region name
     if(searchcity || searchregion)
@@ -129,7 +160,7 @@ int on_connect(struct hookparam *hp)
         strcat(connmsg, region);
     }
 
-    //city and region strings copied, lets free git structure
+    //city and region strings copied, lets free gir structure
     if(gir) GeoIPRecord_delete(gir);
 
     if(country)
@@ -146,6 +177,8 @@ int on_connect(struct hookparam *hp)
     strcat(connmsg, addrp);
     if(!first) strcat(connmsg, "\f1]");
 
+    if(logoutf) logoutf(connmsg);
+
     notifypriv(connmsg, PRIV_ADMIN, PRIV_ROOT);
 
     return 0;
@@ -158,12 +191,7 @@ char *z_init(void *getext, void *setext, char *args)
     int i;
     int nomem = 0;
 
-    //*(void **)(&z_getext) = getext;
-    typedef void *(* getexttype)(char *);
     z_getext = (getexttype)getext;
-
-    //*(void **)(&z_setext) = setext;
-    typedef void (* setexttype)(char *, void *);
     z_setext = (setexttype)setext;
 
     argc = _argsep(args, 16, argv);
@@ -191,27 +219,28 @@ char *z_init(void *getext, void *setext, char *args)
             needcity = 0;
             break;
 
+        case 'u':
+            useunicode = 1;
+            break;
+
+        case 'b':
+            banproxies = 1;
+            break;
+
         default:
             return "Unknown switch";
     }
 
-//  *(void **)(&sendf) = z_getext("sendf");
-    //*(void **)(&notifypriv) = z_getext("notifypriv");
-    typedef void (* notifyprivtype)(char *, int, int);
     notifypriv = (notifyprivtype)z_getext("notifypriv");
     if(!notifypriv) return "Can't find notifypriv server API entry";
 
-    //*(void **)(&debug) = z_getext("debug");
-    typedef void (* debugtype)(char *);
     debug = (debugtype)z_getext("debug");
 
-    //*(void **)(&addhook) = z_getext("addhook");
-    typedef void (* addhooktype)(char *, int (*hookfunc)(struct hookparam *));
+    logoutf = (logoutftype)z_getext("logoutf");
+
     addhook = (addhooktype)z_getext("addhook");
     if(!addhook) return "Can't find addhook server API entry";
 
-    //*(void **)(&delhook) = z_getext("delhook");
-    typedef void (* delhooktype)(char *, int (*hookfunc)(struct hookparam *));
     delhook = (delhooktype)z_getext("delhook");
     if(!delhook && debug) debug("Can't find delhook server API entry");
 
@@ -231,6 +260,12 @@ char *z_init(void *getext, void *setext, char *args)
             return "Failed to load GeoIPCity database";
         }
         else if(debug) debug("Failed to load GeoIPCity database (GeoLiteCity.dat)");
+    }
+
+    if(useunicode)
+    {
+        if(gi) GeoIP_set_charset(gi, GEOIP_CHARSET_UTF8);
+        if(gic) GeoIP_set_charset(gic, GEOIP_CHARSET_UTF8);
     }
 
     addhook("connected", on_connect);

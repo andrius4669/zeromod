@@ -232,8 +232,10 @@ namespace server
         int editmute;
         int editmutewarn;
         int forcedspectator;
-        bool fakeprivon;
-        int fakepriv;
+        int namemute;
+        //int teammute;
+        //bool fakeprivon;
+        //int fakepriv;
         bool spy;
         int failpass;
         clientinfo *tkiller;
@@ -4454,17 +4456,13 @@ namespace server
 
         char badchars[] = "/$%^&*()\\'\"`~";
         for(char *s = argv[0]; *s; s++)
-        {
             for(char *p = badchars; *p; p++)
-            {
                 if(*s == *p)
                 {
                     _notify("\f3[FAIL] Invalid module name", ci);
                     if(!ci) logoutf("\f3[FAIL] Invalid module name");
                     return;
                 }
-            }
-        }
 
 #ifdef WIN32
         formatstring(fname)("modules\\%s.dll", argv[0]);
@@ -4948,14 +4946,17 @@ namespace server
         ucharbuf b(buf, MAXSTRLEN);
         putint(b, N_SWITCHNAME);
         sendstring(name, b);
-        //broadcast
+        //broadcast to other clients
         if(broadcast) ci->messages.put(buf, b.len);
         //prepare packet for client itself
         packetbuf p(MAXSTRLEN, ENET_PACKET_FLAG_RELIABLE);
         putint(p, N_CLIENT);
         putint(p, ci->clientnum);
+        //put length of packet
         putint(p, b.len);
+        //put packet itself
         p.put(buf, b.len);
+        //send to owner, because ci->messages doesn't do it
         sendpacket(ci->ownernum, 1, p.finalize());
     }
 
@@ -4966,15 +4967,15 @@ namespace server
         copystring(buf, args);
         _argsep(buf, 2, argv);
         int cn = atoi(argv[0]);
-        if(!ci && strcmp(argv[0], "0"))
+        if(!cn && strcmp(argv[0], "0"))
         {
-            _man("usage", cmd, ci);
+            if(ci) _man("usage", cmd, ci);
             return;
         }
         clientinfo *cx = getinfo(cn);
         if(!cx)
         {
-            _notify("\f3Client with such client number not found", ci);
+            _notify("client with such client number not found", ci);
             return;
         }
 
@@ -4985,7 +4986,46 @@ namespace server
         }
         else copystring(cx->name, "unnamed");
 
-        _rename(cx, cx->name);
+        _rename(cx, cx->name, true);
+    }
+
+    void _namemutefunc(const char *cmd, const char *args, clientinfo *ci)
+    {
+        string buf;
+        char *argv[2];
+        bool val;
+
+        copystring(buf, args);
+        _argsep(buf, 2, argv);
+
+        val = strcmp(cmd, "unnamemute") && strcmp(cmd, "nameunmute");
+
+        int cn = atoi(argv[0]);
+        if(!cn && strcmp(argv[0], "0"))
+        {
+            if(ci && !strcmp(argv[0], "me")) cn = ci->clientnum;
+            else
+            {
+                if(ci) _man("usage", cmd, ci);
+                return;
+            }
+        }
+        clientinfo *cx = getinfo(cn);
+        if(!cx)
+        {
+            _notify("client with such client number not found", ci);
+            return;
+        }
+
+        if((argv[1] && argv[1][0]) || val)
+        {
+            if(argv[1] && argv[1][0]) filtertext(cx->name, argv[1], false, MAXNAMELEN);
+            if(!argv[1] || !argv[1][0] || !cx->name[0]) copystring(cx->name, "unnamed");
+            _rename(cx, cx->name, true);
+        }
+
+        if(cx->state.aitype == AI_NONE) sendf(cx->clientnum, 1, "ris", N_SERVMSG, "your rename was %smuted", val ? "" : "un");
+        cx->_xi.namemute = val ? 1 : 0;
     }
 
     void _sendmap(clientinfo *ci, clientinfo *target)
@@ -5344,8 +5384,8 @@ namespace server
             _notify(msg, ci);
             return;
         }
-        uint ip = getclientip(cx->clientnum);
-        formatstring(msg)("\fs\f1[IP:\f0%i\f1:\f7%s\f1] \f5%i.%i.%i.%i\fr", cn, colorname(cx), ip&0xFF, (ip>>8)&0xFF, (ip>>16)&0xFF, (ip>>24)&0xFF);
+        //uint ip = getclientip(cx->clientnum);
+        formatstring(msg)("\fs\f1[IP:\f0%i\f1:\f7%s\f1] \f0%s\fr", cn, colorname(cx), getclienthostname(cn));
         sendf(ci ? ci->clientnum : -1, 1, "ris", N_SERVMSG, msg);
     }
 
@@ -5367,47 +5407,47 @@ namespace server
             sendf(ci ? ci->clientnum : -1, 1, "ris", N_SERVMSG, msg);
         }
 
-        copystring(msg, "\f5[INFO] \f7Architecture: "
+        copystring(msg, "\f5[INFO] \f7Architecture: \f0"
         /* Firstly determine OS */
 #if !(defined(_WIN32) || defined(WIN32) || defined(WIN64) || defined(_WIN64))
         /* unix/posix compilant os */
 #   if defined(__linux__) || defined(__linux) || defined(linux) || defined(__gnu_linux__)
-            "\f0GNU/Linux"
+            "GNU/Linux"
 #   elif defined(__GNU__) || defined(__gnu_hurd__)
-            "\f5GNU/Hurd"
+            "GNU/Hurd"
 #   elif defined(__FreeBSD_kernel__) && defined(__GLIBC__)
-            "\f3GNU/FreeBSD"
+            "GNU/FreeBSD"
 #   elif defined(__FreeBSD__) || defined(__FreeBSD_kernel__)
-            "\f3FreeBSD"
+            "FreeBSD"
 #   elif defined(__OpenBSD__)
-            "\f1OpenBSD"
+            "OpenBSD"
 #   elif defined(__NetBSD__)
-            "\f6NetBSD"
+            "NetBSD"
 #   elif defined(__sun) || defined(sun)
-            "\f2Solaris"
+            "Solaris"
 #   elif defined(__DragonFly__)
-            "\f0DragonFlyBSD"
+            "DragonFlyBSD"
 #   elif defined(__MACH__)
 #       if defined(__APPLE__)
-            "\f5Apple"
+            "Apple"
 #       else
-            "\f5Mach"
+            "Mach"
 #       endif
 #   elif defined(__CYGWIN__)
-            "\f0Cygwin"
+            "Cygwin"
 #   elif defined(__unix__) || defined(__unix) || defined(unix) || defined(_POSIX_VERSION)
-            "\f1UNIX"
+            "UNIX"
 #   else
-            "\f4unknown"
+            "unknown"
 #   endif
 #else
         /* Windows */
-            "\f2Windows"
+            "Windows"
 #endif
-            " \f2"
+            " "
         );
 
-        concatstring(msg, (sizeof(void *) == 8) ? "64-bit" : "32-bit");
+        concatstring(msg, (sizeof(void *) == 8) ? "x86_64" : "i386");
 
         concatstring(msg, "\n\f5[INFO] \f7Uptime:");
 
@@ -5426,37 +5466,37 @@ namespace server
 
         if(months)
         {
-            formatstring(buf)(" \f0%u \f2months", months);
+            formatstring(buf)(" \f0%u \f2month%s", months, months > 1 ? "s" : "");
             concatstring(msg, buf);
         }
 
         if(weeks)
         {
-            formatstring(buf)(" \f0%u \f2weeks", weeks);
+            formatstring(buf)(" \f0%u \f2week%s", weeks, weeks > 1 ? "s" : "");
             concatstring(msg, buf);
         }
 
         if(days)
         {
-            formatstring(buf)(" \f0%u \f2days", days);
+            formatstring(buf)(" \f0%u \f2day%s", days, days > 1 ? "s" : "");
             concatstring(msg, buf);
         }
 
         if(hours)
         {
-            formatstring(buf)(" \f0%u \f2hours", hours);
+            formatstring(buf)(" \f0%u \f2hour%s", hours, hours > 1 ? "s" : "");
             concatstring(msg, buf);
         }
 
         if(minutes)
         {
-            formatstring(buf)(" \f0%u \f2minutes", minutes);
+            formatstring(buf)(" \f0%u \f2minute%s", minutes, minutes > 1 ? "s" : "");
             concatstring(msg, buf);
         }
 
         if(seconds)
         {
-            formatstring(buf)(" \f0%u \f2seconds", seconds);
+            formatstring(buf)(" \f0%u \f2second%s", seconds, seconds > 1 ? "s" : "");
             concatstring(msg, buf);
         }
 
@@ -5550,7 +5590,7 @@ namespace server
         _addfunc("help", 0, _man);
         _addhiddenfunc("man", 0, _man);
         _addfunc("info", 0, _info);
-        _addfunc("version", 0, _info);
+        _addhiddenfunc("version", 0, _info);
         _addfunc("pm", 0, _pm);
         _addfunc("exec", PRIV_ROOT, _exec);
         _addfunc("stats", 0, _stats);
@@ -5561,6 +5601,9 @@ namespace server
         _addfunc("spec spectate unspec unspectate", PRIV_MASTER, _spectfunc);
         _addfunc("mute unmute", PRIV_AUTH, _mutefunc);
         _addfunc("editmute editunmute", PRIV_MASTER, _editmutefunc);
+        _addhiddenfunc("uneditmute", PRIV_MASTER, _editmutefunc);
+        _addfunc("namemute nameunmute", PRIV_AUTH, _namemutefunc);
+        _addhiddenfunc("unnamemute", PRIV_AUTH, _namemutefunc);
         _addfunc("spy", PRIV_ADMIN, _spyfunc);
         _addfunc("np", PRIV_NONE, _np);
         _addhiddenfunc("forgive fg", PRIV_NONE, _np);
@@ -6018,7 +6061,7 @@ namespace server
                 getstring(text, p);
                 if(!cq) break;
 
-                if(totalmillis - ci->_xi.lastmsg >= 200) ci->_xi.msgnum = 0;
+                if(totalmillis - ci->_xi.lastmsg >= 500) ci->_xi.msgnum = 0;
                 else ci->_xi.msgnum = max(ci->_xi.msgnum + 1, ci->_xi.msgnum);
                 ci->_xi.lastmsg = totalmillis;
                 if(ci->_xi.msgnum >= 80)
@@ -6076,7 +6119,7 @@ namespace server
                 getstring(text, p);
                 if(!cq) break;
 
-                if(totalmillis - ci->_xi.lastmsg >= 200) ci->_xi.msgnum = 0;
+                if(totalmillis - ci->_xi.lastmsg >= 500) ci->_xi.msgnum = 0;
                 else ci->_xi.msgnum = max(ci->_xi.msgnum + 1, ci->_xi.msgnum);
                 ci->_xi.lastmsg = totalmillis;
                 if(ci->_xi.msgnum >= 80)
@@ -6118,12 +6161,18 @@ namespace server
             {
                 getstring(text, p);
 
-                if(totalmillis - ci->_xi.lastmsg >= 200) ci->_xi.msgnum = 0;
+                if(totalmillis - ci->_xi.lastmsg >= 500) ci->_xi.msgnum = 0;
                 else ci->_xi.msgnum = max(ci->_xi.msgnum + 1, ci->_xi.msgnum);
                 ci->_xi.lastmsg = totalmillis;
                 if(ci->_xi.msgnum >= 80)
                 {
                     if(ci->_xi.msgnum < 160) sendf(sender, 1, "ris", N_SERVMSG, "\f3[ANTIFLOOD] N_SWITCHNAME was blocked");
+                    break;
+                }
+
+                if(ci->_xi.namemute)
+                {
+                    sendf(sender, 1, "ris", N_SERVMSG, "your rename was muted");
                     break;
                 }
 
@@ -6141,7 +6190,7 @@ namespace server
             {
                 ci->playermodel = getint(p);
 
-                if(totalmillis - ci->_xi.lastmsg >= 200) ci->_xi.msgnum = 0;
+                if(totalmillis - ci->_xi.lastmsg >= 500) ci->_xi.msgnum = 0;
                 else ci->_xi.msgnum = max(ci->_xi.msgnum + 1, ci->_xi.msgnum);
                 ci->_xi.lastmsg = totalmillis;
                 if(ci->_xi.msgnum >= 64)
@@ -6158,7 +6207,7 @@ namespace server
             {
                 getstring(text, p);
 
-                if(totalmillis - ci->_xi.lastmsg >= 200) ci->_xi.msgnum = 0;
+                if(totalmillis - ci->_xi.lastmsg >= 500) ci->_xi.msgnum = 0;
                 else ci->_xi.msgnum = max(ci->_xi.msgnum + 1, ci->_xi.msgnum);
                 ci->_xi.lastmsg = totalmillis;
                 if(ci->_xi.msgnum >= 80)
@@ -6235,7 +6284,7 @@ namespace server
 
             case N_REMIP:
                 if(/*!ci || */ci->_xi.editmute || ci->state.state==CS_SPECTATOR || ci->_xi.spy) break;
-                if(totalmillis - ci->_xi.lastremip >= 500) ci->_xi.remipnum = 0;
+                if(totalmillis - ci->_xi.lastremip >= 1000) ci->_xi.remipnum = 0;
                 else ci->_xi.remipnum = max(ci->_xi.remipnum + 1, ci->_xi.remipnum);
                 ci->_xi.lastremip = totalmillis;
                 if(ci->_xi.remipnum >= 10)
@@ -6409,7 +6458,7 @@ namespace server
                 clientinfo *wi = getinfo(who);
                 if(!m_teammode || !text[0] || !wi || !strcmp(wi->team, text)) break;
 
-                if(totalmillis - ci->_xi.lastmsg >= 200) ci->_xi.msgnum = 0;
+                if(totalmillis - ci->_xi.lastmsg >= 500) ci->_xi.msgnum = 0;
                 else ci->_xi.msgnum = max(ci->_xi.msgnum + 1, ci->_xi.msgnum);
                 ci->_xi.lastmsg = totalmillis;
                 if(ci->_xi.msgnum >= 160)
@@ -6489,7 +6538,7 @@ namespace server
             case N_NEWMAP:
             {
                 int size = getint(p);
-                if(totalmillis - ci->_xi.lastremip >= 500) ci->_xi.remipnum = 0;
+                if(totalmillis - ci->_xi.lastremip >= 1000) ci->_xi.remipnum = 0;
                 else ci->_xi.remipnum = max(ci->_xi.remipnum + 1, ci->_xi.remipnum);
                 ci->_xi.lastremip = totalmillis;
                 if(ci->_xi.remipnum >= 10)
@@ -6700,12 +6749,12 @@ namespace server
                 string ftext;
                 getstring(text, p);
 
-                if(totalmillis - ci->_xi.lastmsg >= 200) ci->_xi.msgnum = 0;
+                if(totalmillis - ci->_xi.lastmsg >= 500) ci->_xi.msgnum = 0;
                 else ci->_xi.msgnum = max(ci->_xi.msgnum + 1, ci->_xi.msgnum);
                 ci->_xi.lastmsg = totalmillis;
-                if(ci->_xi.msgnum >= 80)
+                if(ci->_xi.msgnum >= 160)
                 {
-                    if(ci->_xi.msgnum < 160) sendf(sender, 1, "ris", N_SERVMSG, "\f3[ANTIFLOOD] N_SERVCMD was blocked");
+                    if(ci->_xi.msgnum < 320) sendf(sender, 1, "ris", N_SERVMSG, "\f3[ANTIFLOOD] N_SERVCMD was blocked");
                     break;
                 }
 

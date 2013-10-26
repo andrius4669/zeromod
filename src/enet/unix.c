@@ -2,13 +2,14 @@
  @file  unix.c
  @brief ENet Unix system specific functions
 */
-#ifndef WIN32
+#ifndef _WIN32
 
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/ioctl.h>
 #include <sys/time.h>
 #include <arpa/inet.h>
+#include <netinet/tcp.h>
 #include <netdb.h>
 #include <unistd.h>
 #include <string.h>
@@ -103,7 +104,7 @@ enet_address_set_host (ENetAddress * address, const char * name)
     char buffer [2048];
     int errnum;
 
-#if defined(linux) || defined(__linux) || defined(__linux__) || defined(__FreeBSD__) || defined(__FreeBSD_kernel__) || defined(__GNUC__)
+#if defined(linux) || defined(__linux) || defined(__linux__) || defined(__FreeBSD__) || defined(__FreeBSD_kernel__)
     gethostbyname_r (name, & hostData, buffer, sizeof (buffer), & hostEntry, & errnum);
 #else
     hostEntry = gethostbyname_r (name, & hostData, buffer, sizeof (buffer), & errnum);
@@ -156,7 +157,7 @@ enet_address_get_host (const ENetAddress * address, char * name, size_t nameLeng
 
     in.s_addr = address -> host;
 
-#if defined(linux) || defined(__linux) || defined(__linux__) || defined(__FreeBSD__) || defined(__FreeBSD_kernel__) || defined(__GNUC__)
+#if defined(linux) || defined(__linux) || defined(__linux__) || defined(__FreeBSD__) || defined(__FreeBSD_kernel__)
     gethostbyaddr_r ((char *) & in, sizeof (struct in_addr), AF_INET, & hostData, buffer, sizeof (buffer), & hostEntry, & errnum);
 #else
     hostEntry = gethostbyaddr_r ((char *) & in, sizeof (struct in_addr), AF_INET, & hostData, buffer, sizeof (buffer), & errnum);
@@ -258,11 +259,25 @@ enet_socket_set_option (ENetSocket socket, ENetSocketOption option, int value)
             break;
 
         case ENET_SOCKOPT_RCVTIMEO:
-            result = setsockopt (socket, SOL_SOCKET, SO_RCVTIMEO, (char *) & value, sizeof (int));
+        {
+            struct timeval timeVal;
+            timeVal.tv_sec = value / 1000;
+            timeVal.tv_usec = (value % 1000) * 1000;
+            result = setsockopt (socket, SOL_SOCKET, SO_RCVTIMEO, (char *) & timeVal, sizeof (struct timeval));
             break;
+        }
 
         case ENET_SOCKOPT_SNDTIMEO:
-            result = setsockopt (socket, SOL_SOCKET, SO_SNDTIMEO, (char *) & value, sizeof (int));
+        {
+            struct timeval timeVal;
+            timeVal.tv_sec = value / 1000;
+            timeVal.tv_usec = (value % 1000) * 1000;
+            result = setsockopt (socket, SOL_SOCKET, SO_SNDTIMEO, (char *) & timeVal, sizeof (struct timeval));
+            break;
+        }
+
+        case ENET_SOCKOPT_NODELAY:
+            result = setsockopt (socket, IPPROTO_TCP, TCP_NODELAY, (char *) & value, sizeof (int));
             break;
 
         default:

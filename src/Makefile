@@ -130,9 +130,9 @@ clean-enet: enet/Makefile
 clean:
 	-$(RM) $(SERVER_OBJS) $(MASTER_OBJS) sauer_server sauer_master
 
-%.h.gch: %.h
-	$(CXX) $(CXXFLAGS) -o $(subst .h.gch,.tmp.h.gch,$@) $(subst .h.gch,.h,$@)
-	$(MV) $(subst .h.gch,.tmp.h.gch,$@) $@
+#%.h.gch: %.h
+#	$(CXX) $(CXXFLAGS) -o $(subst .h.gch,.tmp.h.gch,$@) $(subst .h.gch,.h,$@)
+#	$(MV) $(subst .h.gch,.tmp.h.gch,$@) $@
 
 %-standalone.o: %.cpp
 	$(CXX) $(CXXFLAGS) -c -o $@ $(subst -standalone.o,.cpp,$@)
