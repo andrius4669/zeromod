@@ -485,7 +485,7 @@ namespace server
 
     void _schedule_disconnect(int n, int reason)
     {
-        loopv(_scheduled_disconnects) if(_scheduled_disconnects[i].n == n) return;
+        loopvrev(_scheduled_disconnects) if(_scheduled_disconnects[i].n == n) return;
          _scheduled_disconnect d;
          d.n = n;
          d.reason = reason;
@@ -3705,10 +3705,17 @@ namespace server
             memset(_hp.args, 0, sizeof(_hp));
             _hp.args[0] = &ci->clientnum;
             _hp.args[1] = (void *)colorname(ci);
-            unsigned int ip = getclientip(ci->clientnum);
+            uint ip = getclientip(ci->clientnum);
             _hp.args[2] = &ip;
             _hp.args[3] = (void *)getclienthostname(ci->clientnum);
             _exechook("connected");
+            if(_hp.args[4])
+            {
+                if(((const char *)_hp.args[4])[0]) sendservmsgf("%s was kicked because: %s", colorname(ci), (const char *)_hp.args[4]);
+                else sendservmsgf("%s was kicked", colorname(ci));
+                addban(ip, 4*60*60000);
+                _schedule_disconnect(ci->ownernum, DISC_KICK);
+            }
         }
 
         if(servermotd[0]) sendf(ci->clientnum, 1, "ris", N_SERVMSG, servermotd);
@@ -4416,6 +4423,7 @@ namespace server
         else if(!strcmp(s, "sendf")) return (void *)sendf;
         else if(!strcmp(s, "debug")) return (void *)_debug;
         else if(!strcmp(s, "notifypriv")) return (void *)_notifypriv;
+        else if(!strcmp(s, "logoutf")) return (void *)logoutf;
         else
         {
             loopv(_plfuncs)
