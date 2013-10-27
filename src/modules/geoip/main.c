@@ -123,7 +123,7 @@ int on_connect(struct hookparam *hp)
     if(searchcountry)
     {
         country = GeoIP_country_name_by_addr(gi, addrp);
-        if(country && strstr(country, "proxy"))
+        if(country && strstr(country, "Proxy"))
         {
             searchcity = searchregion = 0;  //do not resolve cities and regions for proxies
             if(banproxies && !hp->args[4]) hp->args[4] = (void *)country;   //set ban reason

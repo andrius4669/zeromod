@@ -3711,8 +3711,16 @@ namespace server
             _exechook("connected");
             if(_hp.args[4])
             {
-                if(((const char *)_hp.args[4])[0]) sendservmsgf("%s was kicked because: %s", colorname(ci), (const char *)_hp.args[4]);
-                else sendservmsgf("%s was kicked", colorname(ci));
+                if(((const char *)_hp.args[4])[0])
+                {
+                    sendservmsgf("%s was kicked because: %s", colorname(ci), (const char *)_hp.args[4]);
+                    logoutf("%s was kicked by external module because: %s", colorname(ci), (const char *)_hp.args[4]);
+                }
+                else
+                {
+                    sendservmsgf("%s was kicked", colorname(ci));
+                    logoutf("%s was kicked by external module", colorname(ci));
+                }
                 addban(ip, 4*60*60000);
                 _schedule_disconnect(ci->ownernum, DISC_KICK);
             }
@@ -5032,7 +5040,8 @@ namespace server
             _rename(cx, cx->name, true);
         }
 
-        if(cx->state.aitype == AI_NONE) sendf(cx->clientnum, 1, "ris", N_SERVMSG, "your rename was %smuted", val ? "" : "un");
+        defformatstring(msg)("your rename was %smuted", val ? "" : "un");
+        if(cx->state.aitype == AI_NONE) sendf(cx->clientnum, 1, "ris", N_SERVMSG, msg);
         cx->_xi.namemute = val ? 1 : 0;
     }
 
@@ -6034,7 +6043,7 @@ namespace server
                 loopk(hits)
                 {
                     if(p.overread()) break;
-                    if(k > 256)
+                    if(k > 512)
                     {
                         loopj(7) getint(p);
                         continue;
@@ -6074,7 +6083,7 @@ namespace server
                 ci->_xi.lastmsg = totalmillis;
                 if(ci->_xi.msgnum >= 80)
                 {
-                    if(ci->_xi.msgnum < 160) sendf(sender, 1, "ris", N_SERVMSG, "\f3[ANTIFLOOD] N_TEXT was blocked");
+                    if(ci->_xi.msgnum < 100) sendf(sender, 1, "ris", N_SERVMSG, "\f3[ANTIFLOOD] N_TEXT was blocked");
                     break;
                 }
 
@@ -6132,7 +6141,7 @@ namespace server
                 ci->_xi.lastmsg = totalmillis;
                 if(ci->_xi.msgnum >= 80)
                 {
-                    if(ci->_xi.msgnum < 160) sendf(sender, 1, "ris", N_SERVMSG, "\f3[ANTIFLOOD] N_SAYTEAM was blocked");
+                    if(ci->_xi.msgnum < 100) sendf(sender, 1, "ris", N_SERVMSG, "\f3[ANTIFLOOD] N_SAYTEAM was blocked");
                     break;
                 }
 
@@ -6174,12 +6183,13 @@ namespace server
                 ci->_xi.lastmsg = totalmillis;
                 if(ci->_xi.msgnum >= 80)
                 {
-                    if(ci->_xi.msgnum < 160) sendf(sender, 1, "ris", N_SERVMSG, "\f3[ANTIFLOOD] N_SWITCHNAME was blocked");
+                    if(ci->_xi.msgnum < 100) sendf(sender, 1, "ris", N_SERVMSG, "\f3[ANTIFLOOD] N_SWITCHNAME was blocked");
                     break;
                 }
 
                 if(ci->_xi.namemute)
                 {
+                    _rename(ci, ci->name, false);
                     sendf(sender, 1, "ris", N_SERVMSG, "your rename was muted");
                     break;
                 }
@@ -6203,7 +6213,7 @@ namespace server
                 ci->_xi.lastmsg = totalmillis;
                 if(ci->_xi.msgnum >= 64)
                 {
-                    if(ci->_xi.msgnum < 128) sendf(sender, 1, "ris", N_SERVMSG, "\f3[ANTIFLOOD] N_SWITCHMODEL was blocked");
+                    if(ci->_xi.msgnum < 80) sendf(sender, 1, "ris", N_SERVMSG, "\f3[ANTIFLOOD] N_SWITCHMODEL was blocked");
                     break;
                 }
 
@@ -6762,7 +6772,7 @@ namespace server
                 ci->_xi.lastmsg = totalmillis;
                 if(ci->_xi.msgnum >= 160)
                 {
-                    if(ci->_xi.msgnum < 320) sendf(sender, 1, "ris", N_SERVMSG, "\f3[ANTIFLOOD] N_SERVCMD was blocked");
+                    if(ci->_xi.msgnum < 200) sendf(sender, 1, "ris", N_SERVMSG, "\f3[ANTIFLOOD] N_SERVCMD was blocked");
                     break;
                 }
 
