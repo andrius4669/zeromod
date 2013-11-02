@@ -1742,7 +1742,7 @@ namespace server
         putint(p, mastermode);
         loopv(clients) if(clients[i]->privilege >= PRIV_MASTER &&
             !clients[i]->_xi.spy &&
-            !(serverhidepriv > 0 && clients[i]->privilege >= (serverhidepriv == 1 ? PRIV_ADMIN : PRIV_AUTH) &&
+            !(serverhidepriv > 0 && clients[i]->privilege >= (serverhidepriv == 1 ? PRIV_ADMIN : PRIV_MASTER) &&
                 !(clients[i]->privilege == PRIV_AUTH && clients[i]->authname[0] && !clients[i]->authdesc[0])))
         {
             putint(p, clients[i]->clientnum);
@@ -1761,7 +1761,7 @@ namespace server
 
         /* if authname exists and authdesc does not, this is gauth: do not hide privilege */
         bool washidden = (serverhidepriv > 0 &&
-                            ci->privilege >= (serverhidepriv == 1 ? PRIV_ADMIN : PRIV_AUTH) &&
+                            ci->privilege >= (serverhidepriv == 1 ? PRIV_ADMIN : PRIV_MASTER) &&
                             !(ci->privilege == PRIV_AUTH && ci->authname[0] && !ci->authdesc[0])) ||
                             ci->_xi.spy;
 
@@ -1827,7 +1827,7 @@ namespace server
 
         bool ishidden = ci->_xi.spy ||
                         (serverhidepriv > 0 &&
-                        ci->privilege >= (serverhidepriv == 1 ? PRIV_ADMIN : PRIV_AUTH) &&
+                        ci->privilege >= (serverhidepriv == 1 ? PRIV_ADMIN : PRIV_MASTER) &&
                         !(ci->privilege == PRIV_AUTH && ci->authname[0] && !ci->authdesc[0]));
 
         string msg;
@@ -2293,7 +2293,7 @@ namespace server
         }
         loopv(clients) if(clients[i]->privilege >= PRIV_MASTER &&
             !clients[i]->_xi.spy &&
-            !(serverhidepriv > 0 && clients[i]->privilege >= (serverhidepriv == 1 ? PRIV_ADMIN : PRIV_AUTH) &&
+            !(serverhidepriv > 0 && clients[i]->privilege >= (serverhidepriv == 1 ? PRIV_ADMIN : PRIV_MASTER) &&
                 !(clients[i]->privilege == PRIV_AUTH && clients[i]->authname[0] && !clients[i]->authdesc[0])))
         {
             if(!hasmaster)
@@ -3911,6 +3911,8 @@ namespace server
         _addmanpage("interm intermission", "", "Starts intermission");
         _addmanpage("ban", "cn [time]", "Bans client; time is in format: [num][ ][s/m/h/d]; by default, time is 4h; example: #ban 0 1d");
         _addmanpage("votekick", "cn", "Votes client kick");
+        _addmanpage("namemute", "cn [newname]", "Renames client and mutes further rename attempts from him/her");
+        _addmanpage("unnamemute nameunmute", "cn [newname]", "Allows client to rename and optionally sets new name");
         _addmanpage("rename name", "<cn> [name]", "Renames player");
         _addmanpage("time", "<minutes> [seconds]", "Sets remaining time");
         _addmanpage("listgbans showgbans", "", "Shows gbas list");
@@ -4215,7 +4217,7 @@ namespace server
                 ci->state.timeplayed += lastmillis - ci->state.lasttimeplayed;
             }
             aiman::removeai(ci);
-            if(ci->privilege && !(serverhidepriv > 0 && ci->privilege >= (serverhidepriv == 1 ? PRIV_ADMIN : PRIV_AUTH) &&
+            if(ci->privilege && !(serverhidepriv > 0 && ci->privilege >= (serverhidepriv == 1 ? PRIV_ADMIN : PRIV_MASTER) &&
                 !(ci->privilege == PRIV_AUTH && ci->authname[0] && !ci->authdesc[0])))
             {
                 //send out privileges
@@ -4798,9 +4800,9 @@ namespace server
             (cx->privilege!=privilege) &&
             (_getpriv(ci)>=privilege)))
         {
-            bool washidden = cx->_xi.spy || (serverhidepriv > 0 && cx->privilege >= (serverhidepriv == 1 ? PRIV_ADMIN : PRIV_AUTH) &&
+            bool washidden = cx->_xi.spy || (serverhidepriv > 0 && cx->privilege >= (serverhidepriv == 1 ? PRIV_ADMIN : PRIV_MASTER) &&
                 !(cx->privilege == PRIV_AUTH && cx->authname[0] && !cx->authdesc[0]));
-            bool ishidden = cx->_xi.spy || (serverhidepriv && privilege >= (serverhidepriv == 1 ? PRIV_ADMIN : PRIV_AUTH));
+            bool ishidden = cx->_xi.spy || (serverhidepriv && privilege >= (serverhidepriv == 1 ? PRIV_ADMIN : PRIV_MASTER));
             int oldpriv = cx->privilege;
 
             defformatstring(msg)("%s %s %s%s", colorname(cx), privilege?"claimed":"relinquished",
@@ -5246,7 +5248,7 @@ namespace server
             if(!timesugg || totalmillis - timesugg >= 5000)  //display suggestions each 5 voting seconds
             {
                 timesugg = totalmillis ? totalmillis : 1;
-                sendf(-1, 1, "ris", N_SERVMSG, "\f3[votekick] \f2use \f0/kick \f2or \f0#votekick \f2to vote for kicking");
+                sendf(-1, 1, "ris", N_SERVMSG, "\f3[votekick] \f2use \f0#votekick \f2to vote for kicking");
             }
         }
     }
@@ -6427,8 +6429,7 @@ namespace server
                 int victim = getint(p);
                 getstring(text, p);
                 filtertext(text, text);
-                if(!votekick || trykick(ci, victim, text, 0, 0, 0, true)) trykick(ci, victim, text);
-                else _votekick(ci, victim);
+                trykick(ci, victim, text);
                 break;
             }
 
