@@ -153,7 +153,7 @@ int on_connect(struct hookparam *hp)
         strcat(connmsg, city);
     }
 
-    if(region)
+    if(region && (!city || strcmp(city, region)))
     {
         if(first) first = 0;
         else strcat(connmsg, "\f1, \f0");

@@ -2959,11 +2959,16 @@ namespace server
             _cheater(ci, "gunhack", AC_GUNHACK, 100);
             return;
         }
-        if(!gs.isalive(gamemillis) || wait < gs.gunwait) return; //tolerate this
+        if(!gs.isalive(gamemillis) /*|| wait < gs.gunwait*/) return; //tolerate this
+        if(wait < gs.gunwait)
+        {
+            //if(gs.state==CS_ALIVE && (gs.gunwait-wait)>=100) _cheater(ci, "gunhack::fastshot", AC_GUNHACK, 0);
+            return;
+        }
 
         if(gs.ammo[gun] <= 0)
         {
-            if(m_insta && gs.state==CS_ALIVE) _cheater(ci, "gunhack::noammo", AC_GUNHACK, 10);
+            if(m_insta && gs.state==CS_ALIVE) _cheater(ci, "gunhack::noammo", AC_GUNHACK, 34);
             return;
         }
 
@@ -4883,17 +4888,17 @@ namespace server
         if(!ci) return;
         if(!m_teammode || !ci->_xi.tkiller)
         {
-            sendf(ci->clientnum, 1, "ris", N_SERVMSG, "\f4no teamkills to forgive");
+            sendf(ci->clientnum, 1, "ris", N_SERVMSG, "no teamkills to forgive");
             return;
         }
         ci->_xi.tkiller->state.teamkills--;
         addteamkill(ci->_xi.tkiller, ci, -1);
         if(ci->_xi.tkiller->state.aitype == AI_NONE)
         {
-            formatstring(msg)("\f3[teamkill] \f7%s \f0forgave \f1your \f3teamkill", colorname(ci));
+            formatstring(msg)("\f3[teamkill] \f7%s \f0forgave your teamkill", colorname(ci));
             sendf(ci->_xi.tkiller->clientnum, 1, "ris", N_SERVMSG, msg);
         }
-        formatstring(msg)("\f3[teamkill] \f7%s \f2teamkill forgiven", colorname(ci->_xi.tkiller));
+        formatstring(msg)("\f3[teamkill] \f7%s \f0teamkill forgiven", colorname(ci->_xi.tkiller));
         sendf(ci->clientnum, 1, "ris", N_SERVMSG, msg);
         ci->_xi.tkiller = 0;
     }
@@ -5710,12 +5715,12 @@ namespace server
         string msg;
         if(commandchars[0])
         {
-            formatstring(msg)("\f3[teamkill] \f2type \"\f0%cnp\f2\" to to forgive \f7%s \f2teamkill",
+            formatstring(msg)("\f3[teamkill] \f7type \"\f0%cnp\f7\" to forgive %s teamkill",
                   commandchars[0], colorname(ci->_xi.tkiller));
         }
         else
         {
-            formatstring(msg)("\f3[teamkill] \f2type \"\f0/servcmd np\f2\" to to forgive \f7%s \f2teamkill", colorname(ci->_xi.tkiller));
+            formatstring(msg)("\f3[teamkill] \f7type \"\f0/servcmd np\f7\" to forgive %s teamkill", colorname(ci->_xi.tkiller));
         }
         sendf(ci->ownernum, 1, "ris", N_SERVMSG, msg);
 
