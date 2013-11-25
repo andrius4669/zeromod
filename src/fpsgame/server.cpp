@@ -845,12 +845,12 @@ namespace server
     //zeromod variables
     VAR(clearbots, 0, 1, 1);                        //decides if server clears bots upon changing map
     VAR(servergamespeed, 10, 100, 1000);            //default gamespeed
-    FVAR(servergamelimit, 1.0, 10.0, 1440.0);       //max is 24 hours
+    VAR(servergamelimit, 1, 10, 1440);              //max is 24 hours
     VAR(serverovertime, 0, 0, 1);                   //decides if server
     VAR(servercheckgbans, 0, 1, 2);                 //decides if server checks gbans (0=no;1=yes;2=checkifnoadminexists)
     VAR(serverhideip, 0, 0, 1);                     //protects users privacy; disables showing ip in cube server listener
     VAR(beststats, 0, 1, 1);                        //show best stats
-    FVAR(serverintermission, 1.0, 10.0, 3600.0);    //intermission interval (in seconds)
+    VAR(serverintermission, 1, 10, 3600);           //intermission interval (in seconds)
     VAR(serversuggestnp, 0, 1, 1);                  //decides if server suggest players to say #np
     SVAR(commandchars, "#");                        //defines characters which are interepted as command starting characters
     VARF(defaultgamemode, 0, 0, NUMGAMEMODES+STARTGAMEMODE, { if(!m_mp(defaultgamemode)) defaultgamemode = 0; });
@@ -2506,7 +2506,7 @@ namespace server
 
         gamemode = mode;
         gamemillis = 0;
-        gamelimit = ((serverovertime && m_overtime) ? servergamelimit*3/2 : servergamelimit)*60000;
+        gamelimit = ((serverovertime && m_overtime) ? servergamelimit*3/2 : servergamelimit) * 60000;
         interm = 0;
         nextexceeded = 0;
         copystring(smapname, s);
@@ -2710,6 +2710,229 @@ namespace server
         concatstring(msg, buf, MAXTRANS);
     }
 
+    void printbeststats()
+    {
+        vector<clientinfo *> best;
+        int besti;
+        char msg[MAXTRANS];
+
+        static char const * const bestkills = "\f0Best kills:\f1";
+        static char const * const worstkills = "\f0Worst kills:\f1";
+
+        // Best kills
+        msg[0] = '\0';
+        // frags
+        _BESTSTAT(frags);
+        if(besti)
+        {
+            copystring(msg, bestkills, MAXTRANS);
+            concatstring(msg, " frags: \f7", MAXTRANS);
+            _printbest(best, besti, msg);
+        }
+        // damage dealt
+        _BESTSTAT(damage);
+        if(besti > 0)
+        {
+            if(!msg[0]) copystring(msg, bestkills, MAXTRANS);
+            concatstring(msg, " damage dealt: \f7", MAXTRANS);
+            _printbest(best, besti, msg);
+        }
+        // kpd
+        best.setsize(0);
+        best.add(clients[0]);
+        {
+            float bestf = float(best[0]->state.frags) / float(max(best[0]->state.deaths, 1));
+            for(int i = 1; i < clients.length(); i++)
+            {
+                float currf = float(clients[i]->state.frags) / float(max(clients[i]->state.deaths, 1));
+                if(currf > bestf)
+                {
+                    best.setsize(0);
+                    best.add(clients[i]);
+                    bestf = currf;
+                }
+                else if(currf == bestf)
+                {
+                    best.add(clients[i]);
+                }
+            }
+
+            if(bestf >= 0.01f || bestf <= -0.01f)   // non 0
+            {
+                if(!msg[0]) copystring(msg, bestkills, MAXTRANS);
+                concatstring(msg, " kpd: \f7", MAXTRANS);
+                int l = min(best.length(), 3);
+                loopi(l)
+                {
+                    concatstring(msg, colorname(best[i]), MAXTRANS);
+                    if(i + 1 < l) concatstring(msg, ", ", MAXTRANS);
+                }
+                defformatstring(buf)(" \f1(\f0%.2f\f1)", bestf);
+                concatstring(msg, buf, MAXTRANS);
+            }
+        }
+        // accuracy
+        best.setsize(0);
+        best.add(clients[0]);
+        besti = best[0]->state.damage * 100 / max(best[0]->state.shotdamage, 1);
+        for(int i = 1; i < clients.length(); i++) if(!clients[i]->_xi.spy)
+        {
+            int curri = clients[i]->state.damage * 100 / max(clients[i]->state.shotdamage, 1);
+            if(curri > besti)
+            {
+                best.setsize(0);
+                best.add(clients[i]);
+                besti = curri;
+            }
+            else if(curri == besti)
+            {
+                best.add(clients[i]);
+            }
+        }
+        if(besti)
+        {
+            if(!msg[0]) copystring(msg, bestkills, MAXTRANS);
+            concatstring(msg, " accuracy: \f7", MAXTRANS);
+            int l = min(best.length(), 3);
+            loopi(l)
+            {
+                concatstring(msg, colorname(best[i]), MAXTRANS);
+                if(i + 1 < l) concatstring(msg, ", ", MAXTRANS);
+            }
+            defformatstring(buf)(" \f1(\f0%i%%\f1)", besti);
+            concatstring(msg, buf, MAXTRANS);
+        }
+        // print out
+        if(msg[0]) sendservmsg(msg);
+
+        // Worst kills
+        msg[0] = '\0';
+        // deaths
+        _BESTSTAT(deaths);
+        if(besti)
+        {
+            copystring(msg, worstkills, MAXTRANS);
+            concatstring(msg, " deaths: \f7", MAXTRANS);
+            _printbest(best, besti, msg);
+        }
+        // suicides
+        _BESTSTAT(_suicides);
+        if(besti)
+        {
+            if(!msg[0]) copystring(msg, worstkills, MAXTRANS);
+            concatstring(msg, " suicides: \f7", MAXTRANS);
+            _printbest(best, besti, msg);
+        }
+        // teamkills
+        if(m_teammode)
+        {
+            _BESTSTAT(teamkills);
+            if(besti)
+            {
+                if(!msg[0]) copystring(msg, worstkills, MAXTRANS);
+                concatstring(msg, " teamkills: \f7", MAXTRANS);
+                _printbest(best, besti, msg);
+            }
+        }
+        // damage wasted
+        best.setsize(0);
+        best.add(clients[0]);
+        besti = best[0]->state.shotdamage-best[0]->state.damage;
+        for(int i = 1; i < clients.length(); i++) if(!clients[i]->_xi.spy)
+        {
+            int curri = clients[i]->state.shotdamage-clients[i]->state.damage;
+            if(curri > besti)
+            {
+                best.setsize(0);
+                best.add(clients[i]);
+                besti = curri;
+            }
+            else if(curri == besti)
+            {
+                best.add(clients[i]);
+            }
+        }
+        if(besti > 0)
+        {
+            if(!msg[0]) copystring(msg, worstkills, MAXTRANS);
+            concatstring(msg, " damage wasted: \f7", MAXTRANS);
+            _printbest(best, besti, msg);
+        }
+        // print out
+        if(msg[0]) sendservmsg(msg);
+
+        // Print statuses for ctf modes
+        if(m_ctf)
+        {
+            static char const * const bestflags = "\f0Best flags:\f1";
+            _BESTSTAT(flags);
+            if(besti)
+            {
+                copystring(msg, bestflags, MAXTRANS);
+                concatstring(msg, " scored: \f7", MAXTRANS);
+                _printbest(best, besti, msg);
+            }
+            else msg[0] = 0;
+
+            if(m_hold)
+            {
+                _BESTSTAT(_stolen);
+                if(besti)
+                {
+                    if(!msg[0]) copystring(msg, bestflags, MAXTRANS);
+                    concatstring(msg, " taken: \f7", MAXTRANS);
+                    _printbest(best, besti, msg);
+                }
+            }
+            else if(!m_protect)
+            {
+                _BESTSTAT(_stolen);
+                if(besti)
+                {
+                    if(!msg[0]) copystring(msg, bestflags, MAXTRANS);
+                    concatstring(msg, " stolen: \f7", MAXTRANS);
+                    _printbest(best, besti, msg);
+                }
+
+                _BESTSTAT(_returned);
+                if(besti)
+                {
+                    if(!msg[0]) copystring(msg, bestflags, MAXTRANS);
+                    concatstring(msg, " returned: \f7", MAXTRANS);
+                    _printbest(best, besti, msg);
+                }
+            }
+            if(msg[0]) sendservmsg(msg);
+        }
+        else if(m_collect)
+        {
+            static char const * const bestskulls = "\f0Best skulls:\f1";
+            _BESTSTAT(flags);
+            if(besti)
+            {
+                copystring(msg, bestskulls, MAXTRANS);
+                concatstring(msg, " scored: \f7", MAXTRANS);
+                _printbest(best, besti, msg);
+            }
+            else msg[0] = 0;
+            _BESTSTAT(_stolen);
+            if(besti)
+            {
+                if(!msg[0]) copystring(msg, bestskulls, MAXTRANS);
+                concatstring(msg, " stolen: \f7", MAXTRANS);
+                _printbest(best, besti, msg);
+            }
+            _BESTSTAT(_returned);
+            if(besti)
+            {
+                if(!msg[0]) copystring(msg, bestskulls, MAXTRANS);
+                concatstring(msg, " returned: \f7", MAXTRANS);
+                _printbest(best, besti, msg);
+            }
+            if(msg[0]) sendservmsg(msg);
+        }
+    }
+
     void checkintermission()
     {
         if(gamemillis >= gamelimit && !interm)
@@ -2717,191 +2940,8 @@ namespace server
             sendf(-1, 1, "ri2", N_TIMEUP, 0);
             if(smode) smode->intermission();
             changegamespeed(100);
-            interm = gamemillis + int(serverintermission*1000.0);
-            if(beststats && clients.length() > 1)
-            {
-                vector<clientinfo *> best;
-                int besti;
-                char msg[MAXTRANS];
-
-                // Firstly put normal kills statuses
-                // Best kills
-                copystring(msg, "\f0Best kills: \f1frags: \f7", MAXTRANS);
-                _BESTSTAT(frags);
-                _printbest(best, besti, msg);
-
-                // Most deaths (this isn't actually good :))
-                _BESTSTAT(deaths);
-                if(besti)
-                {
-                    concatstring(msg, " deaths: \f7", MAXTRANS);
-                    _printbest(best, besti, msg);
-                }
-
-                //Most suicides
-                _BESTSTAT(_suicides);
-                if(besti)
-                {
-                    concatstring(msg, " suicides: \f7", MAXTRANS);
-                    _printbest(best, besti, msg);
-                }
-
-                // Most teamkills (also not good)
-                if(m_teammode)
-                {
-                    _BESTSTAT(teamkills);
-                    if(besti)
-                    {
-                        concatstring(msg, " teamkills: \f7", MAXTRANS);
-                        _printbest(best, besti, msg);
-                    }
-                }
-
-                // Best kpd
-                best.setsize(0);
-                best.add(clients[0]);
-                {
-                    float bestf = float(best[0]->state.frags) / float(max(best[0]->state.deaths, 1));
-                    for(int i = 1; i < clients.length(); i++)
-                    {
-                        float currf = float(clients[i]->state.frags) / float(max(clients[i]->state.deaths, 1));
-                        if(currf > bestf)
-                        {
-                            best.setsize(0);
-                            best.add(clients[i]);
-                            bestf = currf;
-                        }
-                        else if(currf == bestf)
-                        {
-                            best.add(clients[i]);
-                        }
-                    }
-
-                    if(bestf >= 0.01f || bestf <= -0.01f)   //non 0
-                    {
-                        concatstring(msg, " kpd: \f7", MAXTRANS);
-
-                        int l = min(best.length(), 3);
-                        loopi(l)
-                        {
-                            concatstring(msg, colorname(best[i]), MAXTRANS);
-                            if(i + 1 < l) concatstring(msg, ", ", MAXTRANS);
-                        }
-                        defformatstring(buf)(" \f1(\f0%.2f\f1)", bestf);
-                        concatstring(msg, buf, MAXTRANS);
-                    }
-                }
-
-                // Best accuracy
-                best.setsize(0);
-                best.add(clients[0]);
-                besti = best[0]->state.damage * 100 / max(best[0]->state.shotdamage, 1);
-                for(int i = 1; i < clients.length(); i++) if(!clients[i]->_xi.spy)
-                {
-                    int curri = clients[i]->state.damage * 100 / max(clients[i]->state.shotdamage, 1);
-                    if(curri > besti)
-                    {
-                        best.setsize(0);
-                        best.add(clients[i]);
-                        besti = curri;
-                    }
-                    else if(curri == besti)
-                    {
-                        best.add(clients[i]);
-                    }
-                }
-                if(besti)
-                {
-                    concatstring(msg, " accuracy: \f7", MAXTRANS);
-
-                    int l = min(best.length(), 3);
-                    loopi(l)
-                    {
-                        concatstring(msg, colorname(best[i]), MAXTRANS);
-                        if(i + 1 < l) concatstring(msg, ", ", MAXTRANS);
-                    }
-                    defformatstring(buf)(" \f1(\f0%i%%\f1)", besti);
-                    concatstring(msg, buf, MAXTRANS);
-                }
-
-                sendservmsg(msg);
-
-                // Print statuses for ctf modes
-                if(m_ctf)
-                {
-                    _BESTSTAT(flags);
-                    if(besti)
-                    {
-                        copystring(msg, "\f0Best flags: \f1scored: \f7", MAXTRANS);
-                        _printbest(best, besti, msg);
-                    }
-                    else msg[0] = 0;
-
-                    if(m_hold)
-                    {
-                        _BESTSTAT(_stolen);
-                        if(besti)
-                        {
-                            if(!msg[0])
-                                copystring(msg, "\f0Best flags:\f1", MAXTRANS);
-                            concatstring(msg, " taken: \f7", MAXTRANS);
-                            _printbest(best, besti, msg);
-                        }
-                    }
-                    else if(!m_protect)
-                    {
-                        _BESTSTAT(_stolen);
-                        if(besti)
-                        {
-                            if(!msg[0])
-                                copystring(msg, "\f0Best flags:\f1", MAXTRANS);
-                            concatstring(msg, " stolen: \f7", MAXTRANS);
-                            _printbest(best, besti, msg);
-                        }
-
-                        _BESTSTAT(_returned);
-                        if(besti)
-                        {
-                            if(!msg[0])
-                                copystring(msg, "\f0Best flags:\f1", MAXTRANS);
-                            concatstring(msg, " returned: \f7", MAXTRANS);
-                            _printbest(best, besti, msg);
-                        }
-                    }
-
-                    if(msg[0]) sendservmsg(msg);
-                }
-                else if(m_collect)
-                {
-                    _BESTSTAT(flags);
-                    if(besti)
-                    {
-                        copystring(msg, "\f0Best skulls: \f1scored: \f7", MAXTRANS);
-                        _printbest(best, besti, msg);
-                    }
-                    else msg[0] = 0;
-
-                    _BESTSTAT(_stolen);
-                    if(besti)
-                    {
-                        if(!msg[0])
-                                copystring(msg, "\f0Best skulls:\f1", MAXTRANS);
-                        concatstring(msg, " stolen: \f7", MAXTRANS);
-                        _printbest(best, besti, msg);
-                    }
-
-                    _BESTSTAT(_returned);
-                    if(besti)
-                    {
-                        if(!msg[0])
-                                copystring(msg, "\f0Best skulls:\f1", MAXTRANS);
-                        concatstring(msg, " returned: \f7", MAXTRANS);
-                        _printbest(best, besti, msg);
-                    }
-
-                    if(msg[0]) sendservmsg(msg);
-                }
-            }
+            interm = gamemillis + serverintermission*1000;
+            if(beststats && clients.length() > 0) printbeststats();
         }
     }
 
@@ -5019,7 +5059,7 @@ namespace server
         if(argv[1] && argv[1][0])
             gl += atoi(argv[1]) * 1000;
 
-        if(gl <= 1000 || gl > 48*60*60000 || gl + gamemillis <= 0 || gl + gamemillis + int(serverintermission*1000) <= 0)
+        if(gl <= 1000 || gl > 48*60*60000 || gl + gamemillis <= 0 || gl + gamemillis + serverintermission*1000 <= 0)
         {
             if(!interm && gamemillis < gamelimit) startintermission();
         }
@@ -5033,12 +5073,12 @@ namespace server
             copystring(msg, "time remaining:");
             if(mins > 0)
             {
-                defformatstring(buf)(" %i minutes", mins);
+                defformatstring(buf)(" %i minute%s", mins, mins!=1 ? "s" : "");
                 concatstring(msg, buf);
             }
             if(secs > 0)
             {
-                defformatstring(buf)(" %i seconds", secs);
+                defformatstring(buf)(" %i second%s", secs, secs!=1 ? "s" : "");
                 concatstring(msg, buf);
             }
 
