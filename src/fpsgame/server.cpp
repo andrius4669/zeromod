@@ -854,15 +854,23 @@ namespace server
     VAR(serversuggestnp, 0, 1, 1);                  //decides if server suggest players to say #np
     SVAR(commandchars, "#");                        //defines characters which are interepted as command starting characters
     VARF(defaultgamemode, 0, 0, NUMGAMEMODES+STARTGAMEMODE, { if(!m_mp(defaultgamemode)) defaultgamemode = 0; });
-    VARF(disabledamage, -1, -1, 1, { _enablefunc("nodamage", disabledamage>=0); }); //disable damage in coop, -1 = not allowed
     int _nodamage = 0;
+    VARF(disabledamage, 0, 0, 2,
+    {
+        _enablefunc("nodamage", disabledamage>0);
+        if(disabledamage <= 0)
+        {
+            if(_nodamage > 0) sendservmsg("nodamage \f4disabled");
+            _nodamage = 0;
+        }
+    });
     VAR(defaultmastermode, MM_AUTH, MM_OPEN, MM_PASSWORD);
-    VAR(serverhidepriv, 0, 0, 2);   //0 - no, 1 - >=admin, 2 - >=auth
-    VARF(votekick, 0, 1, 1, { _enablefunc("votekick", votekick); });
+    VAR(serverhidepriv, 0, 0, 2);   //0 - no, 1 - >=admin, 2 - >=master
+    VARF(votekick, 0, 0, 1, { _enablefunc("votekick", votekick); });
     SVAR(serveradmin, "");
-    VAR(persistteams, 0, 0, 1);
+    VAR(persistteams, 0, 0, 2);
     int persist = 0;
-
+    VAR(protectteamscores, 0, 0, 1);
     SVAR(serverdesc, "");
     SVAR(serverpass, "");
     SVAR(adminpass, "");
@@ -1093,7 +1101,7 @@ namespace server
         resetitems();
         _initfuncs();
         _initman();
-        _enablefunc("nodamage", disabledamage>=0);
+        _enablefunc("nodamage", disabledamage>0);
         _enablefunc("votekick", votekick);
         if(serverflagruns) execfile("flagruns.cfg", false);
     }
@@ -1334,27 +1342,87 @@ namespace server
 
     void persistautoteam()
     {
-        static const char * const teamnames[2] = {"good", "evil"};
-        string goodteam;
-        goodteam[0] = 0;
+        static char const * const teamnames[2] = {"good", "evil"};  // standard team names
+        vector<clientinfo *> team[3];   // 0=good, 1=evil, 2=other nonstandard teams
+        float teamrank[2] = {0, 0};     // standard team scores
+        int remaining;
+
+        // first of all, send all nonstandard teams players to thrid team group
+        remaining = clients.length();
         loopv(clients)
         {
-            if(strcmp(clients[i]->team, teamnames[0]) && strcmp(clients[i]->team, teamnames[1]))
+            clientinfo &ci = *clients[i];
+            if(!ci.team[0]) continue;
+            bool standard = false;
+            loopj(sizeof(teamnames)/sizeof(teamnames[0])) if(!strcmp(ci.team, teamnames[j]))
             {
-                if(!goodteam[0])
+                standard = true;
+                break;
+            }
+            if(standard) continue;
+
+            ci.state.timeplayed = -1;
+            team[2].add(&ci);
+            remaining--;
+        }
+        // now autoteam standard teams players
+        for(int round = 0; remaining>=0; round++)
+        {
+            int first = round&1, second = (round+1)&1, selected = 0;
+            while(teamrank[first] <= teamrank[second])
+            {
+                float rank;
+                clientinfo *ci = choosebestclient(rank);
+                if(!ci) break;
+                if(smode && smode->hidefrags()) rank = 1;
+                else if(selected && rank<=0) break;
+                ci->state.timeplayed = -1;
+                team[first].add(ci);
+                if(rank>0) teamrank[first] += rank;
+                selected++;
+                if(rank<=0) break;
+            }
+            if(!selected) break;
+            remaining -= selected;
+        }
+        loopi(sizeof(team)/sizeof(team[0]))
+        {
+            if(uint(i) < sizeof(teamnames)/sizeof(teamnames[0]))
+            {
+                addteaminfo(teamnames[i]);
+                loopvj(team[i])
                 {
-                    copystring(goodteam, clients[i]->team);
-                    copystring(clients[i]->team, teamnames[0], MAXTEAMLEN+1);
+                    clientinfo *ci = team[i][j];
+                    if(!strcmp(ci->team, teamnames[i])) continue;
+                    copystring(ci->team, teamnames[i], MAXTEAMLEN+1);
+                    sendf(-1, 1, "riisi", N_SETTEAM, ci->clientnum, teamnames[i], -1);
                 }
-                else if(!strcmp(clients[i]->team, goodteam))
+            }
+            else
+            {
+                loopvj(team[i]) addteaminfo(team[i][j]->team);
+            }
+        }
+    }
+
+    void persistctfautoteam()
+    {
+        static char const * const teamnames[2] = {"good", "evil"};
+        string goodteam;
+        goodteam[0] = '\0';
+        loopv(clients)
+        {
+            clientinfo &ci = *clients[i];
+            if(strcmp(ci.team, teamnames[0]) && strcmp(ci.team, teamnames[1]))
+            {
+                if(!goodteam[0] || !strcmp(ci.team, goodteam))
                 {
-                    copystring(clients[i]->team, teamnames[0], MAXTEAMLEN+1);
+                    if(!goodteam[0]) copystring(goodteam, ci.team);
+                    copystring(ci.team, teamnames[0], MAXTEAMLEN+1);
                 }
-                else
-                {
-                    copystring(clients[i]->team, teamnames[1], MAXTEAMLEN+1);
-                }
-                sendf(-1, 1, "riisi", N_SETTEAM, clients[i]->clientnum, clients[i]->team, -1);
+                else copystring(ci.team, teamnames[1], MAXTEAMLEN+1);
+
+                sendf(-1, 1, "riisi", N_SETTEAM, ci.clientnum, ci.team, -1);
             }
         }
         loopi(2) addteaminfo(teamnames[i]);
@@ -2428,8 +2496,6 @@ namespace server
         notgotitems = false;
     }
 
-
-
     void changemap(const char *s, int mode)
     {
         stopdemo();
@@ -2440,7 +2506,7 @@ namespace server
 
         gamemode = mode;
         gamemillis = 0;
-        gamelimit = int(((serverovertime && m_overtime) ? servergamelimit*1.5 : servergamelimit)*60000);
+        gamelimit = ((serverovertime && m_overtime) ? servergamelimit*3/2 : servergamelimit)*60000;
         interm = 0;
         nextexceeded = 0;
         copystring(smapname, s);
@@ -2457,11 +2523,21 @@ namespace server
         sendf(-1, 1, "risii", N_MAPCHANGE, smapname, gamemode, 1);
 
         clearteaminfo();
-        if(m_teammode)
+        if(m_teammode) switch(persist)
         {
-            if(!persist) autoteam();
-            else if(m_ctf) persistautoteam();
-            else loopv(clients) if(clients[i]->team[0]) addteaminfo(clients[i]->team);
+            case 2:
+                if(m_ctf) autoteam();
+                else persistautoteam();
+                break;
+
+            case 1:
+                if(m_ctf) persistctfautoteam();
+                else loopv(clients) if(clients[i]->team[0]) addteaminfo(clients[i]->team);
+                break;
+
+            default:
+                autoteam();
+                break;
         }
 
         if(m_capture) smode = &capturemode;
@@ -2834,7 +2910,8 @@ namespace server
     void dodamage(clientinfo *target, clientinfo *actor, int damage, int gun, const vec &hitpush = vec(0, 0, 0))
     {
         gamestate &ts = target->state;
-        if(!_nodamage || !m_edit) ts.dodamage(damage);
+        //zeromod
+        if(!m_edit || !_nodamage || (_nodamage == 1 ? 0 : target->_xi.editmute)) ts.dodamage(damage);
         if(target!=actor && !isteam(target->team, actor->team)) actor->state.damage += damage;
         sendf(-1, 1, "ri6", N_DAMAGE, target->clientnum, actor->clientnum, damage, ts.armour, ts.health);
         if(target==actor) target->setpushed();
@@ -2860,7 +2937,10 @@ namespace server
                 actor->state.effectiveness += fragvalue*friends/float(max(enemies, 1));
             }
             teaminfo *t = m_teammode ? teaminfos.access(actor->team) : NULL;
-            if(t) t->frags += fragvalue;
+            if(t)
+            {
+                if(!protectteamscores || target!=actor || smode || ts.frags >= 0) t->frags += fragvalue;
+            }
             sendf(-1, 1, "ri5", N_DIED, target->clientnum, actor->clientnum, actor->state.frags, t ? t->frags : 0);
             target->position.setsize(0);
             if(smode) smode->died(target, actor);
@@ -2890,7 +2970,11 @@ namespace server
         ci->state._suicides++;
         ////
         teaminfo *t = m_teammode ? teaminfos.access(ci->team) : NULL;
-        if(t) t->frags += fragvalue;
+        if(t)
+        {
+            //t->frags += fragvalue;
+            if(!protectteamscores || smode || gs.frags >= 0) t->frags += fragvalue;
+        }
         sendf(-1, 1, "ri5", N_DIED, ci->clientnum, ci->clientnum, gs.frags, t ? t->frags : 0);
         ci->position.setsize(0);
         if(smode) smode->died(ci, NULL);
@@ -3234,7 +3318,7 @@ namespace server
         aiman::clearai();
         persist = persistteams;
         if(_newflagrun) { _storeflagruns(); _newflagrun = 0; }
-        if(disabledamage>=0) _nodamage = disabledamage;
+        _nodamage = 0;
     }
 #if 0
     void localconnect(int n)
@@ -5490,37 +5574,37 @@ namespace server
 
         if(months)
         {
-            formatstring(buf)(" \f0%u \f2month%s", months, months > 1 ? "s" : "");
+            formatstring(buf)(" %u month%s", months, months > 1 ? "s" : "");
             concatstring(msg, buf);
         }
 
         if(weeks)
         {
-            formatstring(buf)(" \f0%u \f2week%s", weeks, weeks > 1 ? "s" : "");
+            formatstring(buf)(" %u week%s", weeks, weeks > 1 ? "s" : "");
             concatstring(msg, buf);
         }
 
         if(days)
         {
-            formatstring(buf)(" \f0%u \f2day%s", days, days > 1 ? "s" : "");
+            formatstring(buf)(" %u day%s", days, days > 1 ? "s" : "");
             concatstring(msg, buf);
         }
 
         if(hours)
         {
-            formatstring(buf)(" \f0%u \f2hour%s", hours, hours > 1 ? "s" : "");
+            formatstring(buf)(" %u hour%s", hours, hours > 1 ? "s" : "");
             concatstring(msg, buf);
         }
 
         if(minutes)
         {
-            formatstring(buf)(" \f0%u \f2minute%s", minutes, minutes > 1 ? "s" : "");
+            formatstring(buf)(" %u minute%s", minutes, minutes > 1 ? "s" : "");
             concatstring(msg, buf);
         }
 
         if(seconds)
         {
-            formatstring(buf)(" \f0%u \f2second%s", seconds, seconds > 1 ? "s" : "");
+            formatstring(buf)(" %u second%s", seconds, seconds > 1 ? "s" : "");
             concatstring(msg, buf);
         }
 
@@ -5530,6 +5614,8 @@ namespace server
     void _nodamagefunc(const char *cmd, const char *args, clientinfo *ci)
     {
         bool onlyask;
+        string msg;
+
         if(!m_edit)
         {
             if(ci) sendf(ci->clientnum, 1, "ris", N_SERVMSG, "nodamage is only avaiable in coop edit mode (1)");
@@ -5537,30 +5623,32 @@ namespace server
             return;
         }
 
-        if(args && args[0]) onlyask = false;
-        else onlyask = true;
+        onlyask = (!args || !args[0]);
 
         if(!onlyask)
         {
-            if(disabledamage < 0)
+            int i = atoi(args);
+            int j = clamp(i, 0, 2);
+            if(j > disabledamage)
             {
-                if(ci) sendf(ci->clientnum, 1, "ris", N_SERVMSG, "nodamage is disabled in server configuration");
-                else logoutf("nodamage is disabled in server configuration");
+                formatstring(msg)("nodamage %i is disabled in server configuration", i);
+                if(ci) sendf(ci->clientnum, 1, "ris", N_SERVMSG, msg);
+                else logoutf(msg);
                 return;
             }
-            _nodamage = atoi(args) ? 1 : 0;
+            _nodamage = j;
         }
 
-        defformatstring(msg)("nodamage %sabled", _nodamage ? "\f0en" : "\f4dis");
+        formatstring(msg)("nodamage %sabled%s", _nodamage ? "\f0en" : "\f4dis", _nodamage>1 ? " \f7for non-editmuted players" : "");
         if(!onlyask || ci) sendf((!onlyask || !ci) ? -1 : ci->clientnum, 1, "ris", N_SERVMSG, msg);
-        else logoutf("%s", msg);    //%s isnt needed, but eliminates some warnings
+        else logoutf(msg);
     }
 
     void _persistfunc(const char *cmd, const char *args, clientinfo *ci)
     {
         string msg;
-        if(args && args[0]) persist = atoi(args) ? 1 : 0;
-        formatstring(msg)("persistent teams %sabled", persist ? "\f0en" : "\f4dis");
+        if(args && args[0]) persist = clamp(atoi(args), 0, 2);
+        formatstring(msg)("persistent teams %sabled%s", persist ? "\f0en" : "\f4dis", persist>1 ? " \f7for non-standard teams" : "");
         sendf((!args || !args[0]) && ci ? ci->clientnum : -1, 1, "ris", N_SERVMSG, msg);
     }
 
