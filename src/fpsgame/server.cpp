@@ -1057,12 +1057,12 @@ namespace server
     {
         switch(type)
         {
-            case PRIV_ADMIN: return "\fs\f6admin\fr";
-            case PRIV_AUTH: return "\fs\f0auth\fr";
-            case PRIV_MASTER: return "\fs\f0master\fr";
-            case PRIV_ROOT: return "\fs\f3root\fr";
+            case PRIV_ADMIN: return "admin";
+            case PRIV_AUTH: return "auth";
+            case PRIV_MASTER: return "master";
+            case PRIV_ROOT: return "root";
             case PRIV_NONE: return "none";
-            default: return "\fs\f4unknown\fr";
+            default: return "unknown";
         }
     }
 
