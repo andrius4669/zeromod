@@ -1263,9 +1263,9 @@ namespace server
         if(!ci || (m_timed && gamemillis >= gamelimit)) return false;
         if(!sents.inrange(i))
         {
-            if(m_edit) return false;
-            ci->mapcrc = -1;
-            checkmaps();
+            //if(m_edit) return false;
+            //ci->mapcrc = -1;
+            //checkmaps();
             return false;
         }
         //if((m_timed && gamemillis>=gamelimit) || !sents.inrange(i) || !sents[i].spawned) return false;
@@ -3619,12 +3619,14 @@ namespace server
         // we failed in this auth server, check for other posibilities
         bool found = false;
         for(int authmaster = findauthmaster(ci->authdesc, ci->authmaster); authmaster >= 0; authmaster = findauthmaster(ci->authdesc, authmaster))
+        {
             if(requestmasterf(authmaster, "reqauth %u %s\n", ci->authreq, ci->authname))
             {
                 ci->authmaster = authmaster;
                 found = true;
                 break;
             }
+        }
         // no more suitable auth servers?
         if(!found)
         {
