@@ -326,29 +326,17 @@ const char *disconnectreason(int reason)
     }
 }
 
-VAR(hidedisconnectmessages, 0, 0, 2);   //0=no hiding, 1=hide banned and server FULL messages, 2=hide all disconnect messages
-/* for compatibility */
-ICOMMAND(serverhidebanned, "i", (int *i), { hidedisconnectmessages = clamp(*i, 0, 1); });
-
 void disconnect_client(int n, int reason)
 {
     if(!clients.inrange(n) || clients[n]->type!=ST_TCPIP) return;
-
     enet_peer_disconnect(clients[n]->peer, reason);
-    server::clientdisconnect(n);
+    server::clientdisconnect(n, reason);
     delclient(clients[n]);
     const char *msg = disconnectreason(reason);
     string s;
     if(msg) formatstring(s)("client (%s) disconnected because: %s", clients[n]->hostname, msg);
     else formatstring(s)("client (%s) disconnected", clients[n]->hostname);
     logoutf("%s", s);
-
-    if(!hidedisconnectmessages ||
-        (hidedisconnectmessages < 2 && (reason!=DISC_IPBAN && reason!=DISC_LOCAL && reason!=DISC_MAXCLIENTS && reason!=DISC_TIMEOUT)))
-    {
-        if(hidedisconnectmessages) server::sendservmsgf("\f4%s", s);    //make message darker
-        else server::sendservmsg(s);
-    }
 }
 
 #if 0
@@ -870,7 +858,7 @@ void serverslice(bool dedicated, uint timeout)   // main server update, called f
             {
                 client *c = (client *)event.peer->data;
                 if(!c) break;
-                server::clientdisconnect(c->num);
+                server::clientdisconnect(c->num, DISC_NONE);
                 logoutf("disconnected client (%s)", c->hostname);
                 delclient(c);
                 break;

@@ -445,6 +445,7 @@ extern bool isdedicatedserver();
 extern int findauthmaster(const char *desc, int prev = -1);
 extern bool usemastergbans(int master);
 extern int masterauthprivilege(int master);
+extern const char *disconnectreason(int reason);
 
 // client
 extern void sendclientpacket(ENetPacket *packet, int chan);

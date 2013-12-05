@@ -276,7 +276,7 @@ namespace server
         char *authkickreason;
         int authmaster;
         _extrainfo _xi;
-
+        char *disconnectreason;
 
         clientinfo() : getdemo(NULL), getmap(NULL), clipboard(NULL), authchallenge(NULL), authkickreason(NULL) { reset(); }
         ~clientinfo() { events.deletecontents(); cleanclipboard(); cleanauth(); }
@@ -500,6 +500,10 @@ namespace server
  */
     VAR(anticheatmessages, 0, 2, 2);    // 0=everyone, 1=masters, 2=admins
 
+    VAR(anticheat_bantime, -1, 0, 14*24*60);  // ban length
+
+    void addpban(const char *name, const char *reason);
+
     void _cheater(clientinfo *ci, const char *s, int type, int n)
     {
         clientinfo *owner;
@@ -564,7 +568,21 @@ namespace server
         if(anticheat <= 1 || ci->privilege >= PRIV_ADMIN || owner->privilege >= PRIV_ADMIN) return;
 
         if(n >= 100 || (anticheat >= 4 && n == 0))
-            _schedule_disconnect(ci->ownernum, DISC_MSGERR);
+        {
+            if(anticheat_bantime == 0 || n == 0) _schedule_disconnect(ci->ownernum, DISC_MSGERR);
+            else
+            {
+                uint ip = getclientip(ci->ownernum);
+                if(anticheat_bantime > 0) addban(ip, anticheat_bantime*60000);
+                else addpban(getclienthostname(ci->ownernum), NULL);
+                loopvrev(clients)
+                {
+                    clientinfo &c = *clients[i];
+                    if(c.state.aitype != AI_NONE || c.privilege >= PRIV_ADMIN) continue;
+                    if(getclientip(c.clientnum) == ip) _schedule_disconnect(c.clientnum, DISC_KICK);
+                }
+            }
+        }
     }
 
     struct _flagrun
@@ -831,7 +849,8 @@ namespace server
 
     vector<demofile> demos;
 
-    VARN(recorddemo, demonextmatch, 0, 0, 1);
+    VAR(recorddemo, 0, 0, 1);
+    int demonextmatch = 0;
     stream *demotmp = NULL, *demorecord = NULL, *demoplayback = NULL;
     int nextplayback = 0, demomillis = 0;
 
@@ -1535,7 +1554,7 @@ namespace server
         stream *f = opengzfile(NULL, "wb", demotmp);
         if(!f) { DELETEP(demotmp); return; }
 
-        //sendservmsg("recording demo");
+        if(demonextmatch < 2) sendservmsg("recording demo");
 
         demorecord = f;
 
@@ -2564,6 +2583,7 @@ namespace server
         else if(demonextmatch)
         {
             setupdemorecord();
+            demonextmatch = recorddemo ? 2 : 0;
         }
 
         if(smode) smode->setup();
@@ -2951,7 +2971,7 @@ namespace server
     {
         gamestate &ts = target->state;
         //zeromod
-        if(!m_edit || !_nodamage || (_nodamage == 1 ? 0 : target->_xi.editmute)) ts.dodamage(damage);
+        if(!m_edit || !_nodamage || (_nodamage == 1 ? 0 : (target->_xi.editmute && actor->_xi.editmute))) ts.dodamage(damage);
         if(target!=actor && !isteam(target->team, actor->team)) actor->state.damage += damage;
         sendf(-1, 1, "ri6", N_DAMAGE, target->clientnum, actor->clientnum, damage, ts.armour, ts.health);
         if(target==actor) target->setpushed();
@@ -3092,7 +3112,7 @@ namespace server
 
         if(gs.ammo[gun] <= 0)
         {
-            if(m_insta && gs.state==CS_ALIVE) _cheater(ci, "gunhack::noammo", AC_GUNHACK, 34);
+            if(m_insta && gs.state==CS_ALIVE) _cheater(ci, "gunhack::noammo", AC_GUNHACK, 25);
             return;
         }
 
@@ -3391,7 +3411,7 @@ namespace server
         return DISC_NONE;
     }
 
-    void clientdisconnect(int n)
+    void clientdisconnect(int n, int reason)
     {
         clientinfo *ci = (clientinfo *)getclientinfo(n);
         if(!ci) return;
@@ -3401,6 +3421,8 @@ namespace server
             if(clients[i]->_xi.tkiller == ci) clients[i]->_xi.tkiller = 0;
             if(clients[i]->_xi.votekickvictim == ci->clientnum) clients[i]->_xi.votekickvictim = -1;
         }
+        const char *msg = disconnectreason(reason);
+        string s;
         if(ci->connected)
         {
             if(ci->privilege) setmaster(ci, false);
@@ -3411,10 +3433,24 @@ namespace server
             sendf(-1, 1, "ri2", N_CDIS, n);
             aiman::removeai(ci);
             clients.removeobj(ci);
+            if(msg)
+            {
+                formatstring(s)("\f4client %s (%s) disconnected because: %s", colorname(ci), getclienthostname(n), msg);
+                sendservmsg(s);
+            }
             if(!numclients(-1, false, true)) noclients(); // bans clear when server empties
             //if(ci->local) checkpausegame();
         }
-        else connects.removeobj(ci);
+        else
+        {
+            connects.removeobj(ci);
+            if(reason != DISC_IPBAN)
+            {
+                if(msg) formatstring(s)("\f4client (%s) disconnected because: %s", getclienthostname(n), msg);
+                else formatstring(s)("\f4client (%s) disconnected", getclienthostname(n));
+                sendservmsg(s);
+            }
+        }
 
         if(publicserver != 1 && autolockmaster && numclients(-1, false) < autolockmaster) mastermask |= MM_AUTOAPPROVE;
     }
@@ -4141,7 +4177,7 @@ namespace server
         string msg;
         if(!ci) return;
         int sender = ci->ownernum;
-        sendf(sender, 1, "ris", N_SERVMSG, "\f3gban list:");
+        sendf(sender, 1, "ris", N_SERVMSG, "\f3gbans list:");
         loopv(gbans)
         {
             int x = 0;
@@ -5766,7 +5802,8 @@ namespace server
         _addfunc("sendto", PRIV_MASTER, _sendto);
         _addfunc("rename", PRIV_AUTH, _renamefunc);
         _addhiddenfunc("name", PRIV_AUTH, _renamefunc);
-        _addfunc("listgbans showgbans", PRIV_AUTH, _showgbans);
+        _addfunc("listgbans", PRIV_MASTER, _showgbans);
+        _addhiddenfunc("showgbans", PRIV_MASTER, _showgbans);
         _addfunc("nodamage", PRIV_MASTER, _nodamagefunc);
         _addfunc("persist", PRIV_MASTER, _persistfunc);
         _addfunc("halt", PRIV_ROOT, _haltfunc);
@@ -6642,8 +6679,8 @@ namespace server
                     sendf(ci->clientnum, 1, "ris", N_SERVMSG, "the server has disabled demo recording");
                     break;
                 }
-                demonextmatch = val;
-                sendservmsgf("demo recording is %sabled", demonextmatch ? "\f0en" : "\f3dis");
+                demonextmatch = clamp(val, 0, 1);
+                sendservmsgf("demo recording is %s for next match", demonextmatch ? "enabled" : "disabled");
                 break;
             }
 
