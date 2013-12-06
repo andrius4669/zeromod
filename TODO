@@ -1,7 +1,3 @@
 These features are higher priority:
-	* Hidden admin
 	* IRC support
 
-These are lower priority features:
-	* Scripting (low priority because I prefer C++)
-	* Better modules support (currently I implement modules interfaces as needed, there should be consistent and stable API)
