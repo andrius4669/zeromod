@@ -3430,7 +3430,7 @@ namespace server
             ci->state.timeplayed += lastmillis - ci->state.lasttimeplayed;
             savescore(ci);
             logoutf("leave: %s", colorname(ci));
-            sendf(-1, 1, "ri2", N_CDIS, n);
+            if(!ci->_xi.spy) sendf(-1, 1, "ri2", N_CDIS, n);
             aiman::removeai(ci);
             clients.removeobj(ci);
             if(msg)
@@ -4048,9 +4048,9 @@ namespace server
     }
 
     static void _addmanpage(const char *cmd, const char *arg, const char *desc)
-	{
-		_manpages.add(new _manpage(cmd, arg, desc));
-	}
+    {
+        _manpages.add(new _manpage(cmd, arg, desc));
+    }
 
     void _initman()
     {
@@ -4084,6 +4084,7 @@ namespace server
         _addmanpage("time", "<minutes> [seconds]", "Sets remaining time");
         _addmanpage("listgbans showgbans", "", "Shows gbas list");
         _addmanpage("nodamage", "[1/0]", "Disables damage in coop edit mode");
+        _addmanpage("getip", "cn", "Get client ip");
     }
 
     void _man(const char *cmd, const char *args, clientinfo *ci)
