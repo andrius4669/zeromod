@@ -3178,7 +3178,7 @@ namespace server
         return true;
     }
 
-    void clearevent(clientinfo *ci)
+    inline void clearevent(clientinfo *ci)
     {
         delete ci->events.remove(0);
     }
@@ -3234,7 +3234,7 @@ namespace server
             else if(!m_timed || gamemillis < gamelimit)
             {
                 processevents();
-                if(curtime)
+                if(curtime && !m_noitems)
                 {
                     loopv(sents) if(sents[i].spawntime) // spawn entities when timer reached
                     {
@@ -4805,9 +4805,17 @@ namespace server
         string buf;
         string msg;
 
+        if(!ci) return;
+
         if(!args || !*args)
         {
             _man("usage", cmd, ci);
+            return;
+        }
+
+        if(ci->_xi.mute)
+        {
+            sendf(ci->ownernum, 1, "ris", N_SERVMSG, "\f5[MUTE] \f3You are muted");
             return;
         }
 
@@ -6319,7 +6327,7 @@ namespace server
                     break;
                 }
 
-                logoutf("%s <%s>: %s", colorname(cq), cq->team, text);
+                logoutf("%s <%s>: %s", colorname(cq), cq->_xi.spy ? "spychat" : cq->state.state!=CS_SPECTATOR ? cq->team : "spectator", text);
                 _checktext(text, ci);
                 if(cq->_xi.spy)
                 {

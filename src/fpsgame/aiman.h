@@ -4,7 +4,7 @@ namespace aiman
     bool dorefresh = false;
     VARN(serverbotlimit, botlimit, 0, 8, MAXBOTS);
     VARN(serverbotbalance, botbalance, 0, 1, 1);
-    SVARF(botname, "bot", { if(!botname[0]) copystring(botname, "bot", MAXNAMELEN+1); });
+    SVARF(serverbotname, "bot", { if(!botname[0]) copystring(botname, "bot", MAXNAMELEN+1); });
 
     void calcteams(vector<teamscore> &teams)
     {
