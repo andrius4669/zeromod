@@ -344,9 +344,9 @@ namespace server
             gameclip = false;
             _xi.tkiller = 0;
             _xi.lasttakeflag = 0;
-			if(_xi.mute && _xi.mute < 2) _xi.mute = 0;
-			if(_xi.editmute && _xi.editmute < 2) _xi.editmute = 0;
-			if(_xi.forcedspectator && _xi.forcedspectator < 2) _xi.forcedspectator = 0;
+            if(_xi.mute && _xi.mute < 2) _xi.mute = 0;
+            if(_xi.editmute && _xi.editmute < 2) _xi.editmute = 0;
+            if(_xi.forcedspectator && _xi.forcedspectator < 2) _xi.forcedspectator = 0;
         }
 
         void reassign()
@@ -895,13 +895,13 @@ namespace server
     SVAR(adminpass, "");
     SVAR(masterpass, "");
     VARF(publicserver, 0, 0, 2, {
-		switch(publicserver)
-		{
-			case 0: default: mastermask = MM_PRIVSERV; break;
-			case 1: mastermask = MM_PUBSERV; break;
-			case 2: mastermask = MM_COOPSERV; break;
-		}
-	});
+        switch(publicserver)
+        {
+            case 0: default: mastermask = MM_PRIVSERV; break;
+            case 1: mastermask = MM_PUBSERV; break;
+            case 2: mastermask = MM_COOPSERV; break;
+        }
+    });
     SVAR(servermotd, "");
 
     VAR(autolockmaster, 0, 0, MAXCLIENTS);
