@@ -49,7 +49,7 @@ GAK_INCLUDES= -DSTANDALONE $(INCLUDES) -Iinclude
 GAK_LIBS= $(STD_LIBS) -L$(WINBIN) -L$(WINLIB) -lzlib1 -lenet -lws2_32 -lwinmm
 else
 GAK_INCLUDES= -DSTANDALONE $(INCLUDES)
-GAK_LIBS= -Lenet -lenet -lz
+GAK_LIBS= -L../enet -lenet -lz
 endif
 
 GAK_OBJS= \
@@ -76,7 +76,7 @@ genauthkey: $(GAK_OBJS)
 
 install: all
 else
-genauthkey: $(GAK_OBJS)
+genauthkey: libenet $(GAK_OBJS)
 	$(CXX) $(CXXFLAGS) -o genauthkey $(GAK_OBJS) $(GAK_LIBS)
 
 install: all
@@ -85,6 +85,10 @@ ifneq (,$(STRIP))
 	$(STRIP) ../../bin_unix/$(PLATFORM_PREFIX)_genauthkey
 endif
 endif
+
+../enet/libenet.a:
+	$(MAKE) -C ../enet
+libenet: ../enet/libenet.a
 
 depend:
 	makedepend -a -o-standalone.o -Y -DSTANDALONE -I../shared $(subst -standalone.o,.cpp,$(GAK_OBJS))
