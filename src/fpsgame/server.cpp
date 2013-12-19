@@ -466,13 +466,13 @@ namespace server
 
     vector<clientinfo *> connects, clients, bots;
 
-    void kickclients(uint ip, clientinfo *actor = NULL)
+    void kickclients(uint ip, clientinfo *actor = NULL, int priv = PRIV_NONE)
     {
         loopvrev(clients)
         {
             clientinfo &c = *clients[i];
             if(c.state.aitype != AI_NONE || c.privilege >= PRIV_ADMIN) continue;
-            if(actor && (c.privilege > actor->privilege || c.clientnum == actor->clientnum)) continue;
+            if(actor && (c.privilege > max(actor->privilege, priv) || c.clientnum == actor->clientnum)) continue;
             if(getclientip(c.clientnum) == ip) disconnect_client(c.clientnum, DISC_KICK);
         }
     }
@@ -2002,7 +2002,7 @@ namespace server
 
                 uint ip = getclientip(victim);
                 addban(ip, 4*60*60000);
-                kickclients(ip/*, ci*/);        // kicker privileges are checked already, if check again, breaks authkicks of privileged clients
+                kickclients(ip, ci, priv);
             }
         }
         return false;
