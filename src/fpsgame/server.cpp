@@ -2002,7 +2002,7 @@ namespace server
 
                 uint ip = getclientip(victim);
                 addban(ip, 4*60*60000);
-                kickclients(ip, ci);
+                kickclients(ip/*, ci*/);        // kicker privileges are checked already, if check again, breaks authkicks of privileged clients
             }
         }
         return false;
@@ -5348,7 +5348,7 @@ namespace server
         sendservmsg(msg);
 
         addban(ip, t);
-        kickclients(ip, 0);
+        kickclients(ip);
     }
 
     struct _kickvote
@@ -5403,7 +5403,7 @@ namespace server
             logoutf("%s", msg);
             sendf(-1, 1, "ris", N_SERVMSG, msg);
             addban(ip, 4*60*60000);
-            kickclients(ip, 0);
+            kickclients(ip);
             votes[i].kicked = true;
         }
 

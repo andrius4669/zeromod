@@ -1,5 +1,3 @@
-
-CFLAGS= -O2 -g -pipe -fstack-protector
 CXXFLAGS= -O2 -g -pipe -fstack-protector
 
 override CXXFLAGS+= -Wall -fsigned-char -fno-exceptions -fno-rtti
@@ -78,7 +76,7 @@ MASTER_LIBS= $(STD_LIBS) -L$(WINBIN) -L$(WINLIB) -lz -lenet -lws2_32 -lwinmm
 else
 # platform is unix-like
 SERVER_INCLUDES= -DSTANDALONE $(INCLUDES)
-SERVER_LIBS= -Lenet/.libs -lenet -lz
+SERVER_LIBS= -Lenet -lenet -lz
 
 MASTER_INCLUDES= -DSTANDALONE -DMASTER $(INCLUDES)
 MASTER_LIBS= $(SERVER_LIBS)
@@ -117,22 +115,15 @@ default: all
 
 all: server master
 
-enet/Makefile:
-	cd enet; ./configure --enable-shared=no --enable-static=yes
-	
-libenet: enet/Makefile
-	$(MAKE)	-C enet/ all
+enet/libenet.a:
+	$(MAKE)	-C enet
+libenet: enet/libenet.a
 
 clean-enet: enet/Makefile
 	$(MAKE) -C enet/ clean
-	-$(RM) -r enet/Makefile enet/autom4te.cache enet/config.log enet/config.status enet/.deps enet/libtool
 
 clean:
 	-$(RM) $(SERVER_OBJS) $(MASTER_OBJS) sauer_server sauer_master
-
-#%.h.gch: %.h
-#	$(CXX) $(CXXFLAGS) -o $(subst .h.gch,.tmp.h.gch,$@) $(subst .h.gch,.h,$@)
-#	$(MV) $(subst .h.gch,.tmp.h.gch,$@) $@
 
 %-standalone.o: %.cpp
 	$(CXX) $(CXXFLAGS) -c -o $@ $(subst -standalone.o,.cpp,$@)
@@ -219,7 +210,6 @@ fpsgame/server-standalone.o: fpsgame/collect.h fpsgame/extinfo.h
 fpsgame/server-standalone.o: fpsgame/aiman.h fpsgame/anticheat.h
 fpsgame/modules-standalone.o: fpsgame/modules.h
 
-
 # masterserver objects dependencies
 engine/master-master.o: shared/cube.h shared/tools.h shared/geom.h
 engine/master-master.o: shared/ents.h shared/command.h shared/iengine.h
@@ -236,8 +226,6 @@ shared/tools-master.o: shared/igame.h
 engine/command-master.o: engine/engine.h shared/cube.h shared/tools.h
 engine/command-master.o: shared/geom.h shared/ents.h shared/command.h
 engine/command-master.o: shared/iengine.h shared/igame.h engine/world.h
-
-
 
 # dont look at these
 # engine/world-standalone.o: engine/engine.h shared/cube.h shared/tools.h shared/geom.h
