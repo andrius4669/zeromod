@@ -3568,14 +3568,13 @@ namespace server
 */
     int allowconnect(clientinfo *ci, const char *pwd = "")
     {
-        if(serverpass[0])
-        {
-            if(!checkpassword(ci, serverpass, pwd)) return DISC_PASSWORD;
-            return DISC_NONE;
-        }
-        if(adminpass[0] && checkpassword(ci, adminpass, pwd)) return DISC_NONE;
+        //if(serverpass[0])
+        //{
+        //    if(!checkpassword(ci, serverpass, pwd)) return DISC_PASSWORD;
+        //    return DISC_NONE;
+        //}
+        //if(adminpass[0] && checkpassword(ci, adminpass, pwd)) return DISC_NONE;
         if(numclients(-1, false, true)>=maxclients) return DISC_MAXCLIENTS;
-        if(masterpass[0] && checkpassword(ci, masterpass, pwd)) return DISC_NONE;
         uint ip = getclientip(ci->clientnum);
         loopvrev(bannedips) if(bannedips[i].ip==ip) return DISC_IPBAN;
         if(checkgban(ip)) return DISC_IPBAN;
@@ -3841,7 +3840,7 @@ namespace server
         }
     }
 
-    void connected(clientinfo *ci)
+    bool connected(clientinfo *ci)
     {
         if(m_demo) enddemoplayback();
 
@@ -3892,6 +3891,7 @@ namespace server
                 }
                 addban(ip, 4*60*60000);
                 _schedule_disconnect(ci->ownernum, DISC_KICK);
+                return false;
             }
         }
 
@@ -3899,6 +3899,8 @@ namespace server
 
         // automatically change master mode to auth if certain client count reached
         if(publicserver != 1 && autolockmaster && numclients(-1, false) >= autolockmaster) mastermask &= ~MM_AUTOAPPROVE;
+
+        return true;
     }
 
 // **************************    ZEROMOD     **********************************************
@@ -5936,7 +5938,21 @@ namespace server
                     getstring(password, p, sizeof(password));
                     getstring(authdesc, p, sizeof(authdesc));
                     getstring(authname, p, sizeof(authname));
-                    int disc = allowconnect(ci, password);
+
+                    int disc = DISC_NUM;
+                    int priv = PRIV_NONE;
+                    if(serverpass[0])
+                    {
+                        if(!checkpassword(ci, serverpass, pwd)) disc = DISC_PASSWORD;
+                        else disc = DISC_NONE;
+                    }
+                    else if(adminpass[0] && checkpassword(ci, adminpass, pwd))
+                    {
+                        disc = DISC_NONE;
+                        priv = PRIV_ADMIN;
+                    }
+
+                    if(disc >= DISC_NUM) disc = allowconnect(ci, password);
                     if(disc)
                     {
                         if(disc == DISC_LOCAL || !serverauth[0] || strcmp(serverauth, authdesc) || !tryauth(ci, authname, authdesc))
@@ -5946,7 +5962,10 @@ namespace server
                         }
                         ci->connectauth = disc;
                     }
-                    else connected(ci);
+                    else
+                    {
+                        if(connected(ci) && priv > PRIV_NONE) setmaster(ci, true, "", NULL, NULL, priv, true);
+                    }
                     break;
                 }
 
