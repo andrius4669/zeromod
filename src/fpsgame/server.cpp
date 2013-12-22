@@ -1821,7 +1821,7 @@ namespace server
         if(ci->state.state==CS_SPECTATOR) aiman::removeai(ci);
     }
 
-    extern void connected(clientinfo *ci);
+    extern bool connected(clientinfo *ci);
 
     void _putmaster(packetbuf &p)
     {
