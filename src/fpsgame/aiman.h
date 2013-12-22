@@ -4,7 +4,6 @@ namespace aiman
     bool dorefresh = false;
     VARN(serverbotlimit, botlimit, 0, 8, MAXBOTS);
     VARN(serverbotbalance, botbalance, 0, 1, 1);
-    SVARF(serverbotname, "bot", { if(!serverbotname[0]) copystring(serverbotname, "bot", MAXNAMELEN+1); });
 
     void calcteams(vector<teamscore> &teams)
     {
@@ -117,7 +116,7 @@ namespace aiman
         ci->state.skill = skill <= 0 ? rnd(50) + 51 : clamp(skill, 1, 101);
 	    clients.add(ci);
 		ci->state.lasttimeplayed = lastmillis;
-		copystring(ci->name, serverbotname, MAXNAMELEN+1);
+		copystring(ci->name, "bot", MAXNAMELEN+1);
 		ci->state.state = CS_DEAD;
         copystring(ci->team, team, MAXTEAMLEN+1);
         ci->playermodel = rnd(128);

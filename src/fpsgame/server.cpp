@@ -472,7 +472,7 @@ namespace server
         {
             clientinfo &c = *clients[i];
             if(c.state.aitype != AI_NONE || c.privilege >= PRIV_ADMIN) continue;
-            if(actor && (c.privilege > max(actor->privilege, priv) || c.clientnum == actor->clientnum)) continue;
+            if(actor && (c.privilege > priv || c.clientnum == actor->clientnum)) continue;
             if(getclientip(c.clientnum) == ip) disconnect_client(c.clientnum, DISC_KICK);
         }
     }
@@ -3641,7 +3641,7 @@ namespace server
     {
         int priv = masterauthprivilege(ci->authmaster);
         ci->cleanauth(ci->connectauth!=0);
-        if(ci->connectauth && !ci->connected) connected(ci);
+        if(ci->connectauth) connected(ci);
         if(ci->authkickvictim >= 0)
         {
             if(setmaster(ci, true, "", ci->authname, ci->authdesc, priv, false, true))
@@ -3659,6 +3659,7 @@ namespace server
 
     uint nextauthreq = 0;
 
+    // executed then user tries to authenticate
     bool tryauth(clientinfo *ci, const char *user, const char *desc)
     {
         ci->cleanauth();
@@ -3721,7 +3722,7 @@ namespace server
             if(!isxdigit(*s)) { *s = '\0'; break; }
         }
 
-        // masterserver auth
+        // masterserver auth, forward challenge to masterserver
         if(ci->authmaster >= 0)
         {
             if(!requestmasterf(ci->authmaster, "confauth %u %s\n", id, val))
@@ -3750,7 +3751,7 @@ namespace server
                 userinfo *u = users.access(userkey(ci->authname, ci->authdesc));
                 if(u)
                 {
-                    if(ci->connectauth && !ci->connected) connected(ci);
+                    if(ci->connectauth) connected(ci);
                     if(ci->authkickvictim >= 0)
                     {
                         if(u->privilege && setmaster(ci, true, "", ci->authname, ci->authdesc, u->privilege, false, true))
@@ -6836,10 +6837,13 @@ namespace server
                 getstring(text, p);
                 filtertext(text, text);
                 int authpriv = PRIV_AUTH;
-                if(desc[0])
+                userinfo *u = NULL;
+                if(desc[0]) u = users.access(userkey(name, desc));
+                if(u) authpriv = u->privilege;
+                else
                 {
-                    userinfo *u = users.access(userkey(name, desc));
-                    if(u) authpriv = u->privilege; /*else break;*/
+                    authpriv = masterauthprivilege(findauthmaster(desc));
+                    if(!authpriv) break;
                 }
                 if(trykick(ci, victim, text, name, desc, authpriv, true) && tryauth(ci, name, desc))
                 {
