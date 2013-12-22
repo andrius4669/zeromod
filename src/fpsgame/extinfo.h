@@ -124,11 +124,11 @@
                 ucharbuf q = p; //remember buffer position
                 putint(q, EXT_PLAYERSTATS_RESP_IDS); //send player ids following
                 if(ci) putint(q, ci->clientnum);
-                else loopv(clients) if(!ci->_xi.spy) putint(q, clients[i]->clientnum);
+                else loopv(clients) if(!clients[i]->_xi.spy) putint(q, clients[i]->clientnum);
                 sendserverinforeply(q);
             
                 if(ci) extinfoplayer(p, ci);
-                else loopv(clients) if(!ci->_xi.spy) extinfoplayer(p, clients[i]);
+                else loopv(clients) if(!clients[i]->_xi.spy) extinfoplayer(p, clients[i]);
                 return;
             }
 
