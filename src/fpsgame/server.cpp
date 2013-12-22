@@ -6106,7 +6106,6 @@ namespace server
             {
                 getstring(text, p);
                 int crc = getint(p);
-                //if(!ci) break;
                 if(strcmp(text, smapname))
                 {
                     if(ci->clientmap[0])
@@ -6566,7 +6565,7 @@ namespace server
                     ci->ping = ping;
                     loopv(ci->bots) ci->bots[i]->ping = ping;
                 }
-                QUEUE_MSG;
+                if(!ci->_xi.spy) QUEUE_MSG;
                 break;
             }
 
