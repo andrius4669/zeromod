@@ -3566,7 +3566,7 @@ namespace server
         return false;
     }
 */
-    int allowconnect(clientinfo *ci, const char *pwd = "")
+    int allowconnect(clientinfo *ci/*, const char *pwd = ""*/)
     {
         //if(serverpass[0])
         //{
@@ -5943,16 +5943,16 @@ namespace server
                     int priv = PRIV_NONE;
                     if(serverpass[0])
                     {
-                        if(!checkpassword(ci, serverpass, pwd)) disc = DISC_PASSWORD;
+                        if(!checkpassword(ci, serverpass, password)) disc = DISC_PASSWORD;
                         else disc = DISC_NONE;
                     }
-                    else if(adminpass[0] && checkpassword(ci, adminpass, pwd))
+                    else if(adminpass[0] && checkpassword(ci, adminpass, password))
                     {
                         disc = DISC_NONE;
                         priv = PRIV_ADMIN;
                     }
 
-                    if(disc >= DISC_NUM) disc = allowconnect(ci, password);
+                    if(disc >= DISC_NUM) disc = allowconnect(ci/*, password*/);
                     if(disc)
                     {
                         if(disc == DISC_LOCAL || !serverauth[0] || strcmp(serverauth, authdesc) || !tryauth(ci, authname, authdesc))
