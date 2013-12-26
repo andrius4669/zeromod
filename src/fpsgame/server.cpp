@@ -1119,6 +1119,7 @@ namespace server
         gamemode = defaultgamemode;
         mastermode = defaultmastermode;
         persist = persistteams;
+        if(recorddemo) demonextmatch = 2;
         resetitems();
         _initfuncs();
         _initman();
@@ -2584,7 +2585,7 @@ namespace server
         }
         else if(demonextmatch || recorddemo)
         {
-            setupdemorecord();
+            if(demonextmatch) setupdemorecord();
             demonextmatch = recorddemo ? 2 : 0;
         }
 
@@ -4116,6 +4117,7 @@ namespace server
         _addmanpage("listgbans showgbans", "", "Shows gbas list");
         _addmanpage("nodamage", "[1/0]", "Disables damage in coop edit mode");
         _addmanpage("getip", "cn", "Get client ip");
+        _addmanpage("persist", "mode", "Controls persist teams behavour: 0 - disabled, 1 - persist teams, 2 - persist only nonstandard teams");
     }
 
     void _man(const char *cmd, const char *args, clientinfo *ci)
