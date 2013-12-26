@@ -135,6 +135,7 @@ namespace server
         int frags, flags, deaths, teamkills, shotdamage, damage, tokens;
         //zeromod
         int _suicides, _stolen, _returned;
+        float yaw, pitch;
         ////
         int lasttimeplayed, timeplayed;
         float effectiveness;
@@ -163,6 +164,7 @@ namespace server
             frags = flags = deaths = teamkills = shotdamage = damage = tokens = 0;
             //zeromod
             _suicides = _stolen = _returned = 0;
+            yaw = pitch = 0;
             ////
 
             lastdeath = 0;
@@ -2580,7 +2582,7 @@ namespace server
         {
             if(clients.length()) setupdemoplayback();
         }
-        else if(demonextmatch)
+        else if(demonextmatch || recorddemo)
         {
             setupdemorecord();
             demonextmatch = recorddemo ? 2 : 0;
@@ -3137,9 +3139,9 @@ namespace server
                     clientinfo *target = getinfo(h.target);
 //                  if(!target || target->state.state!=CS_ALIVE || h.lifesequence!=target->state.lifesequence || h.rays<1 || h.dist > guns[gun].range + 1) continue;
                     if(!target || target->state.state!=CS_ALIVE || h.lifesequence!=target->state.lifesequence) continue;
-                    if(h.rays > 0) totalrays += h.rays;
+                    totalrays += h.rays;
 //                  if(totalrays>maxrays) continue;
-                    if(totalrays > maxrays || h.rays < 1 || h.dist > guns[gun].range + 1)
+                    if(totalrays>maxrays || h.rays<1 || h.dist>guns[gun].range + 1)
                     {
                         //cheat :P
                         _cheater(ci, "gunhack", AC_GUNHACK, 100);
@@ -3147,12 +3149,37 @@ namespace server
                     }
                     int damage = h.rays*guns[gun].damage;
                     if(gs.quadmillis) damage *= 4;
-                    dodamage(target, ci, damage, gun, h.dir);
+                    //bool shouldskip = false;
+                    if(identexists("onhit"))
+                    {
+                        defformatstring(es)("onhit %i %i %f %f %f %i %f %f %f %i %i",
+                                            ci->clientnum, gun, from.x, from.y, from.z,
+                                            target->clientnum, to.x, to.y, to.z,
+                                            h.rays, damage);
+                        /*shouldskip = */executebool(es);
+                    }
+                    /*if(!shouldskip) */dodamage(target, ci, damage, gun, h.dir);
                 }
                 break;
             }
         }
     }
+
+#if 0
+    void vectoyawpitch(const vec &v, float &yaw, float &pitch)
+    {
+        yaw = -atan2(v.x, v.y)/RAD;
+        pitch = asin(v.z/v.magnitude())/RAD;
+    }
+#endif
+
+    ICOMMAND(getclientx, "i", (int *cn), { clientinfo *ci = getinfo(*cn); floatret(ci ? ci->state.o.x : 0.0); });
+    ICOMMAND(getclienty, "i", (int *cn), { clientinfo *ci = getinfo(*cn); floatret(ci ? ci->state.o.y : 0.0); });
+    ICOMMAND(getclientz, "i", (int *cn), { clientinfo *ci = getinfo(*cn); floatret(ci ? ci->state.o.z : 0.0); });
+    ICOMMAND(getclientyaw, "i", (int *cn), { clientinfo *ci = getinfo(*cn); floatret(ci ? ci->state.yaw : 0.0); });
+    ICOMMAND(getclientpitch, "i", (int *cn), { clientinfo *ci = getinfo(*cn); floatret(ci ? ci->state.pitch : 0.0); });
+    ICOMMAND(vectoyaw, "ff", (float *x, float *y), { floatret(-atan2(*x, *y)/RAD); });
+    ICOMMAND(vectopitch, "fff", (float *x, float *y, float *z), { vec v(*x, *y, *z); floatret(asin(v.z/v.magnitude())/RAD); });
 
     void pickupevent::process(clientinfo *ci)
     {
@@ -3274,8 +3301,8 @@ namespace server
                 if(c.state.aitype != AI_NONE) continue;
                 if(c.checkexceeded())
                 {
-                    _cheater(clients[i], "player velocity exceeded", AC_POSHACK, 100);
-                    //disconnect_client(c.clientnum, DISC_MSGERR);
+                    //_cheater(clients[i], "player velocity exceeded", AC_POSHACK, 100);
+                    disconnect_client(c.clientnum, DISC_MSGERR);
                 }
                 else c.scheduleexceeded();
             }
@@ -6030,7 +6057,9 @@ namespace server
                 loopk(3) p.get();
                 int mag = p.get(); if(flags&(1<<3)) mag |= p.get()<<8;
                 int dir = p.get(); dir |= p.get()<<8;
-                vec vel = vec((dir%360)*RAD, (clamp(dir/360, 0, 180)-90)*RAD).mul(mag/DVELF);
+                float yaw = dir%360;
+                float pitch = clamp(dir/360, 0, 180)-90;
+                vec vel = vec(yaw*RAD, pitch*RAD).mul(mag/DVELF);
                 if(flags&(1<<4))
                 {
                     p.get(); if(flags&(1<<5)) p.get();
@@ -6047,6 +6076,8 @@ namespace server
                     }
                     if(smode && cp->state.state==CS_ALIVE) smode->moved(cp, cp->state.o, cp->gameclip, pos, (flags&0x80)!=0);
                     cp->state.o = pos;
+                    cp->state.yaw = yaw;
+                    cp->state.pitch = pitch;
                     cp->gameclip = (flags&0x80)!=0;
                 }
                 break;
