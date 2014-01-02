@@ -1357,7 +1357,7 @@ namespace server
                 clientinfo *ci = team[i][j];
                 if(!strcmp(ci->team, teamnames[i])) continue;
                 copystring(ci->team, teamnames[i], MAXTEAMLEN+1);
-                sendf(-1, 1, "riisi", N_SETTEAM, ci->clientnum, teamnames[i], -1);
+                sendf(!ci->_xi.spy ? -1 : ci->ownernum, 1, "riisi", N_SETTEAM, ci->clientnum, teamnames[i], -1);
             }
         }
     }
@@ -1417,7 +1417,7 @@ namespace server
                     clientinfo *ci = team[i][j];
                     if(!strcmp(ci->team, teamnames[i])) continue;
                     copystring(ci->team, teamnames[i], MAXTEAMLEN+1);
-                    sendf(-1, 1, "riisi", N_SETTEAM, ci->clientnum, teamnames[i], -1);
+                    sendf(!ci->_xi.spy ? -1 : ci->ownernum, 1, "riisi", N_SETTEAM, ci->clientnum, teamnames[i], -1);
                 }
             }
             else
@@ -1444,7 +1444,7 @@ namespace server
                 }
                 else copystring(ci.team, teamnames[1], MAXTEAMLEN+1);
 
-                sendf(-1, 1, "riisi", N_SETTEAM, ci.clientnum, ci.team, -1);
+                sendf(!ci._xi.spy ? -1 : ci.ownernum, 1, "riisi", N_SETTEAM, ci.clientnum, ci.team, -1);
             }
         }
         loopi(2) addteaminfo(teamnames[i]);
@@ -3181,6 +3181,8 @@ namespace server
     ICOMMAND(getclientpitch, "i", (int *cn), { clientinfo *ci = getinfo(*cn); floatret(ci ? ci->state.pitch : 0.0); });
     ICOMMAND(vectoyaw, "ff", (float *x, float *y), { floatret(-atan2(*x, *y)/RAD); });
     ICOMMAND(vectopitch, "fff", (float *x, float *y, float *z), { vec v(*x, *y, *z); floatret(asin(v.z/v.magnitude())/RAD); });
+    ICOMMAND(getclientcolorname, "i", (int *cn), { clientinfo *ci = getinfo(*cn); result(ci ? colorname(ci) : ""); });
+    ICOMMAND(toclient, "is", (int *cn, const char *msg), { clientinfo *ci = (clientinfo *)getclientinfo(*cn); if(ci) sendf(ci->clientnum, 1, "ris", N_SERVMSG, msg); });
 
     void pickupevent::process(clientinfo *ci)
     {
