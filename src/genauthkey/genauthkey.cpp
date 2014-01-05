@@ -116,16 +116,16 @@ int main(int argc, char **argv)
         }
     }
 
+    tiger::hashval hash;
     // private key is just a hash of password
-    bigint<8*sizeof(tiger::hashval::bytes)/BI_DIGIT_BITS> privkey;
+    bigint<8*sizeof(hash.bytes)/BI_DIGIT_BITS> privkey;
     if(mode!=AM_PRIVKEY)
     {
         vector<char> privstr;
-        tiger::hashval hash;
         tiger::hash((const uchar *)seed, (int)strlen(seed), hash);
         memcpy(privkey.digits, hash.bytes, sizeof(hash.bytes));
         memset(hash.bytes, 0, sizeof(hash.bytes));
-        privkey.len = 8*sizeof(tiger::hashval::bytes)/BI_DIGIT_BITS;
+        privkey.len = 8*sizeof(hash.bytes)/BI_DIGIT_BITS;
         privkey.shrink();
         privkey.printdigits(privstr);
         privstr.add('\0');
