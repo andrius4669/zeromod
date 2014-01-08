@@ -3109,7 +3109,7 @@ namespace server
         if(!gs.isalive(gamemillis) /*|| wait < gs.gunwait*/) return; //tolerate this
         if(wait < gs.gunwait)
         {
-            //if(gs.state==CS_ALIVE && (gs.gunwait-wait)>=100) _cheater(ci, "gunhack::fastshot", AC_GUNHACK, 0);
+            _cheater(ci, "gunhack::gundelay", AC_GUNHACK, 0);
             return;
         }
 

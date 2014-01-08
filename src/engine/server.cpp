@@ -517,7 +517,6 @@ ICOMMAND(masterauthdesc, "s", (const char *s),
 });
 
 // privileges of auth claims for this masterserver
-/*
 ICOMMAND(masterauthprivilege, "s", (char *s),
 {
     if(!masters.inrange(currentmaster)) addmaster();
@@ -527,12 +526,11 @@ ICOMMAND(masterauthprivilege, "s", (char *s),
         case 'r': case 'R': priv = PRIV_ROOT; break;
         case 'a': case 'A': priv = PRIV_ADMIN; break;
         case 'c': case 'C': priv = PRIV_MASTER; break;
-        case 'n': case 'N': priv = PRIV_NONE; break;
+//      case 'n': case 'N': priv = PRIV_NONE; break;
         case 'm': case 'M': default: priv = PRIV_AUTH; break;
     }
     masters[currentmaster].masterauthprivilege = priv;
 });
-*/
 
 // register to this masterserver?
 ICOMMAND(masterreg, "i", (int *i),
