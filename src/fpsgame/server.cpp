@@ -5522,7 +5522,7 @@ namespace server
             if(cn < 0)
             {
                 cns.setsize(0);
-                loopj(clients.length()) if(clients[j]) cns.add(clients[j]);
+                loopj(clients.length()) if(!clients[j]->_xi.spy) cns.add(clients[j]);
                 break;
             }
 
@@ -5531,7 +5531,7 @@ namespace server
             if(exists) continue;
 
             clientinfo *cx = getinfo(cn);
-            if(cx) cns.add(cx);
+            if(cx && !cx->_xi.spy) cns.add(cx);
             else
             {
                 formatstring(msg)("\f3Unknown client number \f0%i", cn);
