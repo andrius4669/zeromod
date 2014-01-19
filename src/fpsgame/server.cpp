@@ -2605,6 +2605,10 @@ namespace server
             if(curmaprotation >= 0) nextmaprotation();
             else curmaprotation = smapname[0] ? max(findmaprotation(gamemode, ""), 0) : 0;
         }
+        else
+        {
+            curmaprotation = findmaprotation(gamemode, smapname);
+        }
         maprotation &rot = maprotations[curmaprotation];
         changemap(rot.map, rot.findmode(gamemode));
     }
