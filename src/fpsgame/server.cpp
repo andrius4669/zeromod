@@ -502,7 +502,7 @@ namespace server
  */
     VAR(anticheatmessages, 0, 2, 2);    // 0=everyone, 1=masters, 2=admins
 
-    VAR(anticheat_bantime, -1, 0, 14*24*60);  // ban length
+    VAR(anticheat_bantime, -1, 0, 14*24*60);  // ban time, in minutes
 
     void addpban(const char *name, const char *reason);
 
@@ -3113,7 +3113,7 @@ namespace server
         if(!gs.isalive(gamemillis) /*|| wait < gs.gunwait*/) return; //tolerate this
         if(wait < gs.gunwait)
         {
-            _cheater(ci, "gunhack::gundelay", AC_GUNHACK, 0);
+            _cheater(ci, "gunhack::gundelay", AC_GUNHACK, 100);
             return;
         }
 
