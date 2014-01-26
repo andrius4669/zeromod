@@ -3925,8 +3925,6 @@ namespace server
         logoutf("join: %s", colorname(ci));
         sendinitclient(ci);
 
-        if(m_edit && autosendmap) _sendmap(NULL, ci);
-
         aiman::addclient(ci);
 
         if(m_demo) setupdemoplayback();
@@ -3958,6 +3956,8 @@ namespace server
         }
 
         if(servermotd[0]) sendf(ci->clientnum, 1, "ris", N_SERVMSG, servermotd);
+
+        if(m_edit && autosendmap) _sendmap(NULL, ci);
 
         // automatically change master mode to auth if certain client count reached
         if(publicserver != 1 && autolockmaster && numclients(-1, false) >= autolockmaster) mastermask &= ~MM_AUTOAPPROVE;
