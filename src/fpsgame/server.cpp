@@ -867,7 +867,7 @@ namespace server
     VAR(clearbots, 0, 1, 1);                        //decides if server clears bots upon changing map
     VAR(servergamespeed, 10, 100, 1000);            //default gamespeed
     VAR(servergamelimit, 1, 10, 1440);              //max is 24 hours
-    VAR(serverovertime, 0, 0, 1);                   //decides if server
+    VAR(serverovertime, 0, 0, 1);                   //decides if server use 15 minutes instead of 10 in some modes
     VAR(servercheckgbans, 0, 1, 2);                 //decides if server checks gbans (0=no;1=yes;2=checkifnoadminexists)
     VAR(serverhideip, 0, 0, 1);                     //protects users privacy; disables showing ip in cube server listener
     VAR(beststats, 0, 1, 1);                        //show best stats
@@ -891,6 +891,7 @@ namespace server
     SVAR(serveradmin, "");
     VAR(persistteams, 0, 0, 2);
     int persist = 0;
+    int autosendmap = 0;
     VAR(protectteamscores, 0, 0, 1);
     SVAR(serverdesc, "");
     SVAR(serverpass, "");
@@ -3830,6 +3831,26 @@ namespace server
         }
     }
 
+    void _sendmap(clientinfo *ci, clientinfo *target)
+    {
+        if(!target) return;
+
+        if(!mapdata)
+        {
+            if(ci) sendf(ci->clientnum, 1, "ris", N_SERVMSG, "no map to send");
+        }
+        else if(target->getmap)
+        {
+            if(ci) sendf(ci->clientnum, 1, "ris", N_SERVMSG, "already sending map");
+        }
+        else
+        {
+            sendservmsgf("[%s is getting the map]", colorname(target));
+            if((target->getmap = sendfile(target->clientnum, 2, mapdata, "ri", N_SENDMAP))) target->getmap->freeCallback = freegetmap;
+            target->needclipboard = totalmillis ? totalmillis : 1;
+        }
+    }
+
     VAR(maxsendmap, -1, 4, 1024);
     void receivefile(int sender, uchar *data, int len)
     {
@@ -3856,6 +3877,11 @@ namespace server
         if(!mapdata) { sendf(sender, 1, "ris", N_SERVMSG, "failed to open temporary file for map"); return; }
         mapdata->write(data, len);
         sendservmsgf("[%s sent a map to server, \"\f0/getmap\f7\" to receive it]", colorname(ci));
+        if(autosendmap >= 2) loopv(clients)
+        {
+            if(clients[i]->state.aitype!=AI_NONE || clients[i]->clientnum==ci->clientnum) continue;
+            _sendmap(NULL, clients[i]);
+        }
     }
 
     void sendclipboard(clientinfo *ci)
@@ -3898,6 +3924,8 @@ namespace server
         if(restorescore(ci)) sendresume(ci);
         logoutf("join: %s", colorname(ci));
         sendinitclient(ci);
+
+        if(m_edit && autosendmap) _sendmap(NULL, ci);
 
         aiman::addclient(ci);
 
@@ -5262,26 +5290,6 @@ namespace server
         cx->_xi.namemute = val ? 1 : 0;
     }
 
-    void _sendmap(clientinfo *ci, clientinfo *target)
-    {
-        if(!target) return;
-
-        if(!mapdata)
-        {
-            if(ci) sendf(ci->clientnum, 1, "ris", N_SERVMSG, "no map to send");
-        }
-        else if(target->getmap)
-        {
-            if(ci) sendf(ci->clientnum, 1, "ris", N_SERVMSG, "already sending map");
-        }
-        else
-        {
-            sendservmsgf("[%s is getting the map]", colorname(target));
-            if((target->getmap = sendfile(target->clientnum, 2, mapdata, "ri", N_SENDMAP))) target->getmap->freeCallback = freegetmap;
-            target->needclipboard = totalmillis ? totalmillis : 1;
-        }
-    }
-
     void _sendto(const char *cmd, const char *args, clientinfo *ci)
     {
         int cn;
@@ -5778,6 +5786,15 @@ namespace server
         sendf((!args || !args[0]) && ci ? ci->clientnum : -1, 1, "ris", N_SERVMSG, msg);
     }
 
+    void _autosendmapfunc(const char *cmd, const char *args, clientinfo *ci)
+    {
+        string msg;
+        if(args && args[0]) autosendmap = clamp(atoi(args), 0, 2);
+        if(autosendmap) formatstring(msg)("autosendmap set to %d mode", autosendmap);
+        else copystring(msg, "autosendmap disabled");
+        sendf((!args || !args[0]) && ci ? ci->clientnum : -1, 1, "ris", N_SERVMSG, msg);
+    }
+
     void _haltfunc(const char *cmd, const char *args, clientinfo *ci)
     {
         quitserver = true;
@@ -5856,6 +5873,7 @@ namespace server
         _addhiddenfunc("showgbans", PRIV_MASTER, _showgbans);
         _addfunc("nodamage", PRIV_MASTER, _nodamagefunc);
         _addfunc("persist", PRIV_MASTER, _persistfunc);
+        _addfunc("autosendmap", PRIV_MASTER, _autosendmapfunc);
         _addfunc("halt", PRIV_ROOT, _haltfunc);
     }
 
