@@ -3412,6 +3412,7 @@ namespace server
         bannedips.shrink(0);
         aiman::clearai();
         persist = persistteams;
+        autosendmap = 0;
         if(_newflagrun) { _storeflagruns(); _newflagrun = 0; }
         _nodamage = 0;
     }
@@ -5308,7 +5309,15 @@ namespace server
             }
             return;
         }
-
+        if(cn < 0)
+        {
+            if(!mapdata)
+            {
+                if(ci) sendf(ci->clientnum, 1, "ris", N_SERVMSG, "no map to send");
+                return;
+            }
+            loopv(clients) if(clients[i]->state.aitype==AI_NONE && (!ci || clients[i]->clientnum!=ci->clientnum)) _sendmap(NULL, clients[i]);
+        }
         clientinfo *cx = (clientinfo *)getclientinfo(cn);
         if(!cx)
         {
