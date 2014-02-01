@@ -2,6 +2,17 @@
 #include "modules.h"
 #include "anticheat.h"
 
+// TODO:
+/*
+ * time btw multikills: 2 secs
+ * kills without deaths:
+ * 5: killing sphere
+ * 10: rampage
+ * 15: dominating
+ * 20: unstoppable
+ * 30: godlike
+ */
+
 namespace game
 {
     void parseoptions(vector<const char *> &args)
@@ -136,6 +147,7 @@ namespace server
         //zeromod
         int _suicides, _stolen, _returned;
         float yaw, pitch;
+        int lastkill, multikills, rampage;
         ////
         int lasttimeplayed, timeplayed;
         float effectiveness;
@@ -180,6 +192,11 @@ namespace server
             lastspawn = -1;
             lastshot = 0;
             tokens = 0;
+            //zeromod
+            lastkill = 0;
+            multikills = 0;
+            rampage = 0;
+            ////
         }
 
         void reassign()
@@ -2975,6 +2992,8 @@ namespace server
 
     void startintermission() { gamelimit = min(gamelimit, gamemillis); checkintermission(); }
 
+    VAR(allowmultikill, 0, 0, 1);
+
     void dodamage(clientinfo *target, clientinfo *actor, int damage, int gun, const vec &hitpush = vec(0, 0, 0))
     {
         gamestate &ts = target->state;
@@ -3010,6 +3029,27 @@ namespace server
                 if(!protectteamscores || target!=actor || smode || ts.frags >= 0) t->frags += fragvalue;
             }
             sendf(-1, 1, "ri5", N_DIED, target->clientnum, actor->clientnum, actor->state.frags, t ? t->frags : 0);
+            //zeromod
+            if(fragvalue>0)
+            {
+                if(!actor->state.lastkill || gamemillis-actor->state.lastkill>2000) actor->state.multikills = 0;
+                actor->state.lastkill = gamemillis ? gamemillis : 1;
+                actor->state.multikills++;
+                actor->state.rampage++;
+                if(allowmultikill && !m_edit)
+                {
+                    if(identexists("showmultikill"))
+                    {
+                        defformatstring(cmd)("showmultikill %d %d %d", actor->clientnum, actor->state.rampage, actor->state.multikills);
+                        execute(cmd);
+                    }
+                    else
+                    {
+                        if(actor->state.rampage > 0 && actor->state.rampage%5 == 0) sendservmsgf("%s did %d multiple kills", colorname(actor), actor->state.rampage);
+                    }
+                }
+            }
+            ////
             target->position.setsize(0);
             if(smode) smode->died(target, actor);
             ts.state = CS_DEAD;
