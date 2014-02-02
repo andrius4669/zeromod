@@ -3045,7 +3045,7 @@ namespace server
                     }
                     else
                     {
-                        if(actor->state.rampage > 0 && actor->state.rampage%5 == 0) sendservmsgf("%s did %d multiple kills", colorname(actor), actor->state.rampage);
+                        if(actor->state.rampage > 0 && actor->state.rampage%5 == 0) sendservmsgf("\fs%s \f2did \f6%d \f2frags\fr", colorname(actor), actor->state.rampage);
                     }
                 }
             }
