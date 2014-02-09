@@ -7136,6 +7136,7 @@ namespace server
             extserverinforeply(req, p);
             return;
         }
+        if(req.remaining()) return; // if request, no data should remain
 
         putint(p, numclients(-1, false, true));
         putint(p, gamepaused || gamespeed != 100 ? 7 : 5);                   // number of attrs following
