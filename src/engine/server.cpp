@@ -691,7 +691,9 @@ void sendserverinforeply(ucharbuf &p)
     enet_socket_send(pongsock, &pongaddr, &buf, 1);
 }
 
-void checkserversockets()        // reply all server info requests
+#define MAXPINGDATA 32
+
+bool checkserversockets()        // reply all server info requests
 {
     static ENetSocketSet readset, writeset;
     ENET_SOCKETSET_EMPTY(readset);
@@ -712,7 +714,7 @@ void checkserversockets()        // reply all server info requests
         maxsock = max(maxsock, lansock);
         ENET_SOCKETSET_ADD(readset, lansock);
     }
-    if(enet_socketset_select(maxsock, &readset, &writeset, 0) <= 0) return;
+    if(enet_socketset_select(maxsock, &readset, &writeset, 0) <= 0) return false;
 
     ENetBuffer buf;
     uchar pong[MAXTRANS];
@@ -724,7 +726,7 @@ void checkserversockets()        // reply all server info requests
         buf.data = pong;
         buf.dataLength = sizeof(pong);
         int len = enet_socket_receive(sock, &pongaddr, &buf, 1);
-        if(len < 0) return;
+        if(len < 0 || len > MAXPINGDATA) continue;
         ucharbuf req(pong, len), p(pong, sizeof(pong));
         p.len += len;
         server::serverinforeply(req, p);
@@ -755,6 +757,7 @@ void checkserversockets()        // reply all server info requests
             if(masters[i].mastersock != ENET_SOCKET_NULL && ENET_SOCKETSET_CHECK(readset, masters[i].mastersock)) flushmasterinput(i);
         }
     }
+    return true;
 }
 
 int curtime = 0, lastmillis = 0, totalmillis = 0;
@@ -779,6 +782,8 @@ void updatetime()
         lastsec += cursecs * 1000;
     }
 }
+
+VAR(serverpingsockpriority, 0, 0, 1);
 
 void serverslice(bool dedicated, uint timeout)   // main server update, called from main loop in sp, or from below in dedicated server
 {
@@ -805,7 +810,7 @@ void serverslice(bool dedicated, uint timeout)   // main server update, called f
     server::serverupdate();
 
     flushmasteroutput();
-    checkserversockets();
+    while(checkserversockets() && serverpingsockpriority);
 
     if(allowupdatemaster && masters.empty()) addmaster();
 

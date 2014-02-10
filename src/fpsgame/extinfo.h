@@ -99,7 +99,6 @@
         {
             case EXT_UPTIME:
             {
-                if(req.remaining()) return; // if request, no data should remain
                 putint(p, totalsecs); //in seconds
                 break;
             }
@@ -107,7 +106,7 @@
             case EXT_PLAYERSTATS:
             {
                 int cn = getint(req); //a special player, -1 for all
-                if(req.remaining()) return; // if request, no data should remain
+                if(cn < 0 && req.remaining() > 16) return;
                 
                 clientinfo *ci = NULL;
                 if(cn >= 0)
@@ -136,14 +135,12 @@
 
             case EXT_TEAMSCORE:
             {
-                if(req.remaining()) return; // if request, no data should remain
                 extinfoteams(p);
                 break;
             }
 
             default:
             {
-                if(req.remaining()) return; // if request, no data should remain
                 putint(p, EXT_ERROR);
                 break;
             }
