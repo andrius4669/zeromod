@@ -691,7 +691,7 @@ void sendserverinforeply(ucharbuf &p)
     enet_socket_send(pongsock, &pongaddr, &buf, 1);
 }
 
-#define MAXPINGDATA 32
+#define MAXPINGDATA 64
 
 bool checkserversockets()        // reply all server info requests
 {
@@ -783,7 +783,7 @@ void updatetime()
     }
 }
 
-VAR(serverpingsockpriority, 0, 0, 1);
+VAR(serverpingsockpriority, 0, 0, 128);
 
 void serverslice(bool dedicated, uint timeout)   // main server update, called from main loop in sp, or from below in dedicated server
 {
@@ -810,7 +810,8 @@ void serverslice(bool dedicated, uint timeout)   // main server update, called f
     server::serverupdate();
 
     flushmasteroutput();
-    while(checkserversockets() && serverpingsockpriority);
+    int c = 0;
+    while(checkserversockets() && ++c < serverpingsockpriority);
 
     if(allowupdatemaster && masters.empty()) addmaster();
 
@@ -1217,6 +1218,8 @@ bool servererror(const char *desc)
     return false;
 }
 
+VAR(uselansock, 0, 1, 1);
+
 bool setuplistenserver(void)
 {
     ENetAddress address = { ENET_HOST_ANY, enet_uint16(serverport <= 0 ? server::serverport() : serverport) };
@@ -1239,13 +1242,13 @@ bool setuplistenserver(void)
     if(pongsock == ENET_SOCKET_NULL) return servererror("could not create server info socket");
     else enet_socket_set_option(pongsock, ENET_SOCKOPT_NONBLOCK, 1);
     address.port = server::laninfoport();
-    lansock = enet_socket_create(ENET_SOCKET_TYPE_DATAGRAM);
+    lansock = uselansock ? enet_socket_create(ENET_SOCKET_TYPE_DATAGRAM) : ENET_SOCKET_NULL;
     if(lansock != ENET_SOCKET_NULL && (enet_socket_set_option(lansock, ENET_SOCKOPT_REUSEADDR, 1) < 0 || enet_socket_bind(lansock, &address) < 0))
     {
         enet_socket_destroy(lansock);
         lansock = ENET_SOCKET_NULL;
     }
-    if(lansock == ENET_SOCKET_NULL) conoutf(CON_WARN, "WARNING: could not create LAN server info socket");
+    if(lansock == ENET_SOCKET_NULL) { if(uselansock) conoutf(CON_WARN, "WARNING: could not create LAN server info socket"); }
     else enet_socket_set_option(lansock, ENET_SOCKOPT_NONBLOCK, 1);
     return true;
 }
