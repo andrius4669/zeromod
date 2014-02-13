@@ -691,7 +691,7 @@ void sendserverinforeply(ucharbuf &p)
     enet_socket_send(pongsock, &pongaddr, &buf, 1);
 }
 
-#define MAXPINGDATA 64
+#define MAXPINGDATA 32
 
 bool checkserversockets()        // reply all server info requests
 {
