@@ -746,9 +746,9 @@ namespace server
             if(rot.match(mode, map)) return i;
         }
         int start;
-        for(start = max(curmaprotation, 0) - 1; start >= 0; start--) if(!maprotations[start].modes) break;
+        for(start = clamp(curmaprotation, 0, maprotations.length()) - 1; start >= 0; start--) if(!maprotations[start].modes) break;
         start++;
-        for(int i = start; i < curmaprotation; i++)
+        for(int i = start; i < min(curmaprotation, maprotations.length()); i++)
         {
             maprotation &rot = maprotations[i];
             if(!rot.modes) break;
