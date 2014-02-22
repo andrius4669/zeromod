@@ -2614,19 +2614,24 @@ namespace server
     {
         if(!maprotations.inrange(curmaprotation))
         {
-            changemap("", 1);
+            curmaprotation = findmaprotation(gamemode, smapname);
+            if(curmaprotation < 0 && smapname[0]) curmaprotation = findmaprotation(gamemode, "");
+            else if(next) nextmaprotation();
+            if(maprotations.inrange(curmaprotation) && maprotations[curmaprotation].modes)
+            {
+                maprotation &rot = maprotations[curmaprotation];
+                changemap(rot.map, rot.findmode(gamemode));
+            }
+            else changemap(smapname, gamemode);
             return;
         }
+        curmaprotation = findmaprotation(gamemode, smapname);
         if(next)
         {
-            curmaprotation = findmaprotation(gamemode, smapname);
             if(curmaprotation >= 0) nextmaprotation();
             else curmaprotation = smapname[0] ? max(findmaprotation(gamemode, ""), 0) : 0;
         }
-        else
-        {
-            curmaprotation = findmaprotation(gamemode, smapname);
-        }
+        else if(curmaprotation < 0) curmaprotation = smapname[0] ? max(findmaprotation(gamemode, ""), 0) : 0;
         maprotation &rot = maprotations[curmaprotation];
         changemap(rot.map, rot.findmode(gamemode));
     }
