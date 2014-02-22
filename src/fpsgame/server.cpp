@@ -6202,7 +6202,7 @@ namespace server
                 int val = getint(p);
                 if(!m_edit)
                 {
-                    if(val)
+                    if(val && gamemillis >= 10000)
                     {
                         disconnect_client(sender, DISC_MSGERR);
                         return;
