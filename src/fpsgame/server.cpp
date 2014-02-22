@@ -2615,7 +2615,7 @@ namespace server
         if(!maprotations.inrange(curmaprotation))
         {
             curmaprotation = findmaprotation(gamemode, smapname);
-            if(curmaprotation < 0 && smapname[0]) curmaprotation = findmaprotation(gamemode, "");
+            if(curmaprotation < 0) { if(smapname[0]) curmaprotation = findmaprotation(gamemode, ""); }
             else if(next) nextmaprotation();
             if(maprotations.inrange(curmaprotation) && maprotations[curmaprotation].modes)
             {
