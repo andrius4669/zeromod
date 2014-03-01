@@ -69,10 +69,10 @@ endif # ifneq (,$(findstring MINGW,$(PLATFORM)))
 ifneq (,$(findstring MINGW,$(PLATFORM)))
 # platform is windows
 SERVER_INCLUDES= -DSTANDALONE $(INCLUDES) -Iinclude
-SERVER_LIBS= -mwindows $(STD_LIBS) -L$(WINBIN) -L$(WINLIB) -lz -lenet -lws2_32 -lwinmm
+SERVER_LIBS= -mwindows $(STD_LIBS) -L$(WINBIN) -L$(WINLIB) -lzlib1 -lenet -lws2_32 -lwinmm
 
 MASTER_INCLUDES= -DSTANDALONE -DMASTER $(INCLUDES) -Iinclude
-MASTER_LIBS= $(STD_LIBS) -L$(WINBIN) -L$(WINLIB) -lz -lenet -lws2_32 -lwinmm
+MASTER_LIBS= $(STD_LIBS) -L$(WINBIN) -L$(WINLIB) -lzlib1 -lenet -lws2_32 -lwinmm
 else
 # platform is unix-like
 SERVER_INCLUDES= -DSTANDALONE $(INCLUDES)
