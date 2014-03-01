@@ -101,9 +101,9 @@ int main(int argc, char **argv)
         // for better randomness, use enet_time_get function from enet
         seedMT(enet_time_get());
         // randomly select password length
-        uint s = (randomMT()%8)+3;
+        uint s = (randomMT()%8)+4;
         // characters used in password
-        static const char * const characters = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFHIJKLMNOPQRSTUVXYZ~!@#$%&*()_-+=[]{}/\\?<>,. ";
+        static const char * const characters = "defghijk567IJPQRSTUVXYZ~89abcnlm01234o;pqKLM:NOrsCDEFH!@#$%&*()_-+=[]{}/\\|?<>,. tuvwxyzAB";
         uint sz = strlen(characters);
         char *p = seed;
         for(uint i = 0; i < s; i++)

@@ -431,6 +431,7 @@ namespace server
     {
         int time, expire;
         uint ip;
+	bool perm;
     };
 
     namespace aiman
@@ -472,13 +473,14 @@ namespace server
     vector<uint> allowedips;
     vector<ban> bannedips;
 
-    void addban(uint ip, int expire)
+    void addban(uint ip, int expire, bool perm = false)
     {
         allowedips.removeobj(ip);
         ban b;
         b.time = totalmillis;
         b.expire = totalmillis + expire;
         b.ip = ip;
+	b.perm = perm;
         loopv(bannedips) if(b.expire < bannedips[i].expire) { bannedips.insert(i, b); return; }
         bannedips.add(b);
     }
@@ -592,7 +594,7 @@ namespace server
             else
             {
                 uint ip = getclientip(ci->ownernum);
-                if(anticheat_bantime > 0) addban(ip, anticheat_bantime*60000);
+                if(anticheat_bantime > 0) addban(ip, anticheat_bantime*60000, true);
                 else addpban(getclienthostname(ci->ownernum), NULL);
                 loopvrev(clients)
                 {
@@ -3454,7 +3456,8 @@ namespace server
 
     void noclients()
     {
-        bannedips.shrink(0);
+        //bannedips.shrink(0);
+	loopvrev(bannedips) if(!bannedips[i].perm) bannedips.remove(i);
         aiman::clearai();
         persist = persistteams;
         autosendmap = 0;
@@ -4198,6 +4201,7 @@ namespace server
         _addmanpage("nodamage", "[1/0]", "Disables damage in coop edit mode");
         _addmanpage("getip", "cn", "Get client ip");
         _addmanpage("persist", "mode", "Controls persist teams behavour: 0 - disabled, 1 - persist teams, 2 - persist only nonstandard teams");
+        _addmanpage("disconnect disc", "cn", "Forcibly disconnect client (kick without ban)");
     }
 
     void _man(const char *cmd, const char *args, clientinfo *ci)
@@ -5448,10 +5452,23 @@ namespace server
 
         sendservmsg(msg);
 
-        addban(ip, t);
+        addban(ip, t, true);
         kickclients(ip);
     }
 
+    void _disc(const char *cmd, const char *args, clientinfo *ci)
+    {
+        if(!args || !args[0]) return;
+        int cn = atoi(args);
+        if(!cn && strcmp(args, "0")) return;
+        clientinfo *cx = (clientinfo *)getclientinfo(cn);
+        if(!cx || cx->privilege >= PRIV_ADMIN || (ci && (ci->privilege < cx->privilege || ci->clientnum == cx->clientnum))) return;
+        defformatstring(msg)("%s forcibly disconnected %s", ci ? colorname(ci) : "\fs\f3SERVER\fr", colorname(cx));
+        sendservmsg(msg);
+        logoutf("%s", msg);
+        disconnect_client(cn, DISC_KICK);
+    }
+    
     struct _kickvote
     {
         int cn, n;
@@ -5919,6 +5936,8 @@ namespace server
         _addfunc("interm intermission", PRIV_MASTER, _interm);
         _addfunc("time", PRIV_MASTER, _timefunc);
         _addfunc("ban", PRIV_ADMIN, _ban);
+        _addfunc("disconnect", PRIV_MASTER, _disc);
+        _addhiddenfunc("disc", PRIV_MASTER, _disc);
         _addfunc("votekick", PRIV_NONE, _votekickfunc);
         _addfunc("sendto", PRIV_MASTER, _sendto);
         _addfunc("rename", PRIV_AUTH, _renamefunc);
