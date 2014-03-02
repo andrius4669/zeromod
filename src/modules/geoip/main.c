@@ -7,8 +7,6 @@
 
 enum { PRIV_NONE = 0, PRIV_MASTER, PRIV_AUTH, PRIV_ADMIN, PRIV_ROOT };
 
-//void *(* z_getext)(char *);
-//void (* z_setext)(char *, void *);
 
 char dbfile[260]  = "GeoIP.dat";
 int dbfileset = 0;
@@ -29,14 +27,6 @@ typedef void (* addhooktype)(char *, int (*hookfunc)(struct hookparam *));
 typedef void (* delhooktype)(char *, int (*hookfunc)(struct hookparam *));
 typedef void (* logoutftype)(const char *fmt, ...);
 
-/*
-//void *(* sendf)(int, int, char *, ...);
-void (*debug)(char *);
-void (*notifypriv)(char *, int, int);
-void (*addhook)(char *, int (*hookfunc)(struct hookparam *));
-void (*delhook)(char *, int (*hookfunc)(struct hookparam *));
-*/
-
 getexttype z_getext = NULL;
 setexttype z_setext = NULL;
 notifyprivtype notifypriv = NULL;
@@ -51,7 +41,6 @@ GeoIP *gic = 0;
 int needcity = 1;
 int needregion = 0;
 
-int useunicode = 0;
 int banproxies = 0;
 
 int _argsep(char *str, int c, char **argv)
@@ -87,6 +76,28 @@ int _argsep(char *str, int c, char **argv)
 static char connmsg[260];
 static char ipaddr[16];
 
+#define lanstr "Local Area Network"
+
+static const struct
+{
+    unsigned int ip;
+    unsigned int mask;
+    const char *name;
+} reservedips[] =
+{
+    // localhost
+    { 0x0000007F, 0x000000FF, "localhost" },    // 127.0.0.0/8
+    // lan
+    { 0x0000A8C0, 0x0000FFFF, lanstr },         // 192.168.0.0/16
+    { 0x0000000A, 0x000000FF, lanstr },         // 10.0.0.0/8
+    { 0x00004064, 0x0000C0FF, lanstr },         // 100.64.0.0/10
+    { 0x000010AC, 0x0000F0FF, lanstr },         // 172.16.0.0/12
+    { 0x000000C0, 0xF8FFFFFF, lanstr },         // 192.0.0.0/29
+    { 0x000012C6, 0x0000FEFF, lanstr },         // 198.18.0.0/15
+    // autoconfigured lan
+    { 0x0000FEA9, 0x0000FFFF, lanstr }          // 169.254.0.0/16
+};
+
 int on_connect(struct hookparam *hp)
 {
     const char *name = (const char *)hp->args[1];
@@ -114,9 +125,10 @@ int on_connect(struct hookparam *hp)
     }
 
     //check for reserved ip addresses
-    if     ((ip & 0x000000FF) == 0x0000007F) country = "localhost";                     //127.*.*.*
-    else if((ip & 0x0000FFFF) == 0x0000A8C0 || (ip & 0xFF) == 0x0A) country = "LAN";    //192.168.*.*, 10.*.*.*
-    else if((ip & 0x00FFFFFF) == 0x006358C0) country = "6to4 relay";                    //192.88.99.*
+    int i;
+    for(i = 0; i < sizeof(reservedips)/sizeof(reservedips[0]); i++)
+        if((ip & reservedips[i].mask) == reservedips[i].ip)
+            { country = reservedips[i].name; break; }
     if(country) searchregion = searchcity = searchcountry = 0;  //do not do GeoIP lookup for reserved ip addresses
 
     //Get country name
@@ -220,7 +232,7 @@ char *z_init(void *getext, void *setext, char *args)
             break;
 
         case 'u':
-            useunicode = 1;
+            // for compatibility
             break;
 
         case 'b':
@@ -262,11 +274,8 @@ char *z_init(void *getext, void *setext, char *args)
         else if(debug) debug("Failed to load GeoIPCity database (GeoLiteCity.dat)");
     }
 
-    if(useunicode)
-    {
-        if(gi) GeoIP_set_charset(gi, GEOIP_CHARSET_UTF8);
-        if(gic) GeoIP_set_charset(gic, GEOIP_CHARSET_UTF8);
-    }
+    if(gi) GeoIP_set_charset(gi, GEOIP_CHARSET_UTF8);
+    if(gic) GeoIP_set_charset(gic, GEOIP_CHARSET_UTF8);
 
     addhook("connected", on_connect);
 
