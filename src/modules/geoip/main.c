@@ -207,7 +207,7 @@ char *z_init(void *getext, void *setext, char *args)
     z_setext = (setexttype)setext;
 
     argc = _argsep(args, 16, argv);
-    for(i = 0; i < argc; i++) switch(argv[i][0])
+    for(i = 0; i < argc; i++) if(argv[i][0]!='\0' && argv[i][1]=='\0') switch(argv[i][0])
     {
         case 'f':
             strncpy(dbfile, argv[++i], 260);

@@ -3900,7 +3900,7 @@ namespace server
         }
     }
 
-    VAR(maxsendmap, -1, 4, 1024);
+    VAR(maxsendmap, -1, 4, 16);
     void receivefile(int sender, uchar *data, int len)
     {
         clientinfo *ci = getinfo(sender);
