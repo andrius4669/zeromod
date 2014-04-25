@@ -930,7 +930,7 @@ namespace server
 
     struct teamkillkick
     {
-        int modes, limit, ban;
+        int modes, limit, ban, singlelimit;
 
         bool match(int mode) const
         {
@@ -949,7 +949,7 @@ namespace server
         teamkillkicks.setsize(0);
     }
 
-    void addteamkillkick(char *modestr, int *limit, int *ban)
+    void addteamkillkick(char *modestr, int *limit, int *ban, int *singlelimit)
     {
         vector<char *> modes;
         explodelist(modestr, modes);
@@ -957,11 +957,12 @@ namespace server
         kick.modes = genmodemask(modes);
         kick.limit = *limit;
         kick.ban = *ban > 0 ? *ban*60000 : (*ban < 0 ? 0 : 30*60000);
+        kick.singlelimit = *singlelimit;
         modes.deletearrays();
     }
 
     COMMAND(teamkillkickreset, "");
-    COMMANDN(teamkillkick, addteamkillkick, "sii");
+    COMMANDN(teamkillkick, addteamkillkick, "siii");
 
     struct teamkillmessage
     {
@@ -1053,6 +1054,25 @@ namespace server
                 continue;
             }
             if(tk.teamkills <= 0) teamkills.removeunordered(i);
+        }
+        if(kick && kick->singlelimit > 0)
+        {
+            vector<uint> ipstokick;
+            loopv(clients)
+            {
+                clientinfo *ci = &clients[i];
+                if(ci->state.aitype != AI_NONE || ci->local || ci->privilege >= PRIV_MASTER) continue;
+                if(ci->state.teamkills < kick->singlelimit) continue;
+                uint ip = getclientip(ci->clientnum);
+                if(ip && ipstokick.find(ip) < 0) ipstokick.add(ip);
+            }
+            loopv(ipstokick)
+            {
+                uint ip = ipstokick[i];
+                if(kick->ban > 0) addban(ip, kick->ban);
+                kickclients(ip);
+                loopvrev(teamkills) if(teamkills[i].ip == ip) teamkills.removeunordered(i);
+            }
         }
         shouldcheckteamkills = false;
     }
