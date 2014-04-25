@@ -1060,7 +1060,7 @@ namespace server
             vector<uint> ipstokick;
             loopv(clients)
             {
-                clientinfo *ci = &clients[i];
+                clientinfo *ci = clients[i];
                 if(ci->state.aitype != AI_NONE || ci->local || ci->privilege >= PRIV_MASTER) continue;
                 if(ci->state.teamkills < kick->singlelimit) continue;
                 uint ip = getclientip(ci->clientnum);
