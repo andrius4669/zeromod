@@ -905,7 +905,7 @@ namespace server
         }
     });
     VAR(defaultmastermode, MM_AUTH, MM_OPEN, MM_PASSWORD);
-    VAR(serverhidepriv, 0, 0, 2);   //0 - no, 1 - >=admin, 2 - >=master
+    VAR(serverhidepriv, 0, 0, 2);   //0 - no, 1 - >=admin, 2 - >=auth
     VARF(votekick, 0, 0, 1, { _enablefunc("votekick", votekick); });
     SVAR(serveradmin, "");
     VAR(persistteams, 0, 0, 2);
@@ -1872,7 +1872,7 @@ namespace server
         putint(p, mastermode);
         loopv(clients) if(clients[i]->privilege >= PRIV_MASTER &&
             !clients[i]->_xi.spy &&
-            !(serverhidepriv > 0 && clients[i]->privilege >= (serverhidepriv == 1 ? PRIV_ADMIN : PRIV_MASTER) &&
+            !(serverhidepriv > 0 && clients[i]->privilege >= (serverhidepriv == 1 ? PRIV_ADMIN : PRIV_AUTH) &&
                 !(clients[i]->privilege == PRIV_AUTH && clients[i]->authname[0] && !clients[i]->authdesc[0])))
         {
             putint(p, clients[i]->clientnum);
@@ -1891,7 +1891,7 @@ namespace server
 
         /* if authname exists and authdesc does not, this is gauth: do not hide privilege */
         bool washidden = (serverhidepriv > 0 &&
-                            ci->privilege >= (serverhidepriv == 1 ? PRIV_ADMIN : PRIV_MASTER) &&
+                            ci->privilege >= (serverhidepriv == 1 ? PRIV_ADMIN : PRIV_AUTH) &&
                             !(ci->privilege == PRIV_AUTH && ci->authname[0] && !ci->authdesc[0])) ||
                             ci->_xi.spy;
 
@@ -1957,7 +1957,7 @@ namespace server
 
         bool ishidden = ci->_xi.spy ||
                         (serverhidepriv > 0 &&
-                        ci->privilege >= (serverhidepriv == 1 ? PRIV_ADMIN : PRIV_MASTER) &&
+                        ci->privilege >= (serverhidepriv == 1 ? PRIV_ADMIN : PRIV_AUTH) &&
                         !(ci->privilege == PRIV_AUTH && ci->authname[0] && !ci->authdesc[0]));
 
         string msg;
@@ -2423,7 +2423,7 @@ namespace server
         }
         loopv(clients) if(clients[i]->privilege >= PRIV_MASTER &&
             !clients[i]->_xi.spy &&
-            !(serverhidepriv > 0 && clients[i]->privilege >= (serverhidepriv == 1 ? PRIV_ADMIN : PRIV_MASTER) &&
+            !(serverhidepriv > 0 && clients[i]->privilege >= (serverhidepriv == 1 ? PRIV_ADMIN : PRIV_AUTH) &&
                 !(clients[i]->privilege == PRIV_AUTH && clients[i]->authname[0] && !clients[i]->authdesc[0])))
         {
             if(!hasmaster)
@@ -4522,7 +4522,7 @@ namespace server
                 ci->state.timeplayed += lastmillis - ci->state.lasttimeplayed;
             }
             aiman::removeai(ci);
-            if(ci->privilege && !(serverhidepriv > 0 && ci->privilege >= (serverhidepriv == 1 ? PRIV_ADMIN : PRIV_MASTER) &&
+            if(ci->privilege && !(serverhidepriv > 0 && ci->privilege >= (serverhidepriv == 1 ? PRIV_ADMIN : PRIV_AUTH) &&
                 !(ci->privilege == PRIV_AUTH && ci->authname[0] && !ci->authdesc[0])))
             {
                 //send out privileges
@@ -5113,9 +5113,9 @@ namespace server
             (cx->privilege!=privilege) &&
             (_getpriv(ci)>=privilege)))
         {
-            bool washidden = cx->_xi.spy || (serverhidepriv > 0 && cx->privilege >= (serverhidepriv == 1 ? PRIV_ADMIN : PRIV_MASTER) &&
+            bool washidden = cx->_xi.spy || (serverhidepriv > 0 && cx->privilege >= (serverhidepriv == 1 ? PRIV_ADMIN : PRIV_AUTH) &&
                 !(cx->privilege == PRIV_AUTH && cx->authname[0] && !cx->authdesc[0]));
-            bool ishidden = cx->_xi.spy || (serverhidepriv && privilege >= (serverhidepriv == 1 ? PRIV_ADMIN : PRIV_MASTER));
+            bool ishidden = cx->_xi.spy || (serverhidepriv && privilege >= (serverhidepriv == 1 ? PRIV_ADMIN : PRIV_AUTH));
             int oldpriv = cx->privilege;
 
             defformatstring(msg)("%s %s %s%s", colorname(cx), privilege?"claimed":"relinquished",
