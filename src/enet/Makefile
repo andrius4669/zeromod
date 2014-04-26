@@ -1,4 +1,4 @@
-CFLAGS=-O3 -march=native -fomit-frame-pointer
+CFLAGS=-O3 -fomit-frame-pointer
 override CFLAGS:= $(CFLAGS) -Iinclude $(shell ./check_cflags.sh $(CC) $(CFLAGS))
 
 OBJS= \

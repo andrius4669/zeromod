@@ -120,7 +120,7 @@ enet/libenet.a:
 libenet: enet/libenet.a
 
 clean-enet: enet/Makefile
-	$(MAKE) -C enet/ clean
+	$(MAKE) -C enet clean
 
 clean:
 	-$(RM) $(SERVER_OBJS) $(MASTER_OBJS) sauer_server sauer_master
