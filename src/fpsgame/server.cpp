@@ -4189,7 +4189,7 @@ namespace server
 
     void _initman()
     {
-        _addmanpage("help man", "[command]", "Shows help about command or prints avaiable commands");
+        _addmanpage("help man", "[command]", "Shows help about command or prints available commands");
         _addmanpage("info version", "", "Shows information about server");
         _addmanpage("wall announce", "<message>", "Prints message on the wall");
         _addmanpage("mute", "[cn]", "Mutes one or all players");
@@ -5843,8 +5843,8 @@ namespace server
 
         if(!m_edit)
         {
-            if(ci) sendf(ci->clientnum, 1, "ris", N_SERVMSG, "nodamage is only avaiable in coop edit mode (1)");
-            else logoutf("nodamage is only avaiable in coop edit mode (1)");
+            if(ci) sendf(ci->clientnum, 1, "ris", N_SERVMSG, "nodamage is only available in coop edit mode (1)");
+            else logoutf("nodamage is only available in coop edit mode (1)");
             return;
         }
 
@@ -5982,8 +5982,8 @@ namespace server
 
         if(!ci || !cmd || !cmd[0]) return;
 
-        if(commandchars[0]) formatstring(msg)("\f3Unknown command \"\f0%s\f3\". For a list of avaiable commands type \"\f0%chelp\f3\"", cmd, commandchars[0]);
-        else formatstring(msg)("\f3Unknown command \"\f0%s\f3\". For a list of avaiable commands type \"\f3/servcmd help\f3\"", cmd);
+        if(commandchars[0]) formatstring(msg)("\f3Unknown command \"\f0%s\f3\". For a list of available commands type \"\f0%chelp\f3\"", cmd, commandchars[0]);
+        else formatstring(msg)("\f3Unknown command \"\f0%s\f3\". For a list of available commands type \"\f3/servcmd help\f3\"", cmd);
         sendf(ci->ownernum, 1, "ris", N_SERVMSG, msg);
     }
 
