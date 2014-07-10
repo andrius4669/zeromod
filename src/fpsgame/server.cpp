@@ -431,7 +431,7 @@ namespace server
         void calcmaxoverflow()
         {
             int cmax = 200;
-            int bmax = (8 + bots.length()) * 5;
+            int bmax = this->bots.length() * 16;
             cmax = max(cmax, bmax);
             maxoverflow = max(maxoverflow, cmax);
         }
