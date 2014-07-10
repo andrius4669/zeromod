@@ -98,7 +98,7 @@ namespace aiman
 
                 clientinfo *owner = findaiclient();
                 ci->ownernum = owner ? owner->clientnum : -1;
-                if(owner) owner->bots.add(ci);
+                if(owner) { owner->bots.add(ci); owner->calcmaxoverflow(); }
                 ci->aireinit = 2;
                 dorefresh = true;
                 return true;
@@ -112,7 +112,7 @@ namespace aiman
 		ci->state.aitype = AI_BOT;
         clientinfo *owner = findaiclient();
 		ci->ownernum = owner ? owner->clientnum : -1;
-        if(owner) owner->bots.add(ci);
+        if(owner) { owner->bots.add(ci); owner->calcmaxoverflow(); }
         ci->state.skill = skill <= 0 ? rnd(50) + 51 : clamp(skill, 1, 101);
 	    clients.add(ci);
 		ci->state.lasttimeplayed = lastmillis;
@@ -171,7 +171,7 @@ namespace aiman
         clientinfo *prevowner = (clientinfo *)getclientinfo(ci->ownernum);
         if(prevowner) prevowner->bots.removeobj(ci);
 		if(!owner) { ci->aireinit = 0; ci->ownernum = -1; }
-		else if(ci->clientnum != owner->clientnum) { ci->aireinit = 2; ci->ownernum = owner->clientnum; owner->bots.add(ci); }
+		else if(ci->clientnum != owner->clientnum) { ci->aireinit = 2; ci->ownernum = owner->clientnum; owner->bots.add(ci); owner->calcmaxoverflow(); }
         dorefresh = true;
 	}
 

@@ -296,6 +296,7 @@ namespace server
         int authmaster;
         _extrainfo _xi;
         char *disconnectreason;
+        int maxoverflow;
 
         clientinfo() : getdemo(NULL), getmap(NULL), clipboard(NULL), authchallenge(NULL), authkickreason(NULL) { reset(); }
         ~clientinfo() { events.deletecontents(); cleanclipboard(); cleanauth(); }
@@ -353,6 +354,7 @@ namespace server
             state.reset();
             events.deletecontents();
             overflow = 0;
+            maxoverflow = 200;
             timesync = false;
             lastevent = 0;
             exceeded = 0;
@@ -424,6 +426,14 @@ namespace server
                 return servmillis;
             }
             else return gameoffset + clientmillis;
+        }
+
+        void calcmaxoverflow()
+        {
+            int cmax = 200;
+            int bmax = (8 + bots.length()) * 5;
+            cmax = max(cmax, bmax);
+            maxoverflow = max(maxoverflow, cmax);
         }
     };
 
@@ -2147,7 +2157,7 @@ namespace server
             // no overflow check
             case 4: return type;
         }
-        if(ci && ++ci->overflow >= 200) return -2;
+        if(ci && ++ci->overflow >= ci->maxoverflow) return -2;
         return type;
     }
 
@@ -2268,6 +2278,8 @@ namespace server
         {
             clientinfo &ci = *clients[i];
             ci.overflow = 0;
+            ci.maxoverflow = 0;
+            ci.calcmaxoverflow();
             ci.wsdata = NULL;
             wsmax += ci.position.length();
             if(ci.messages.length()) wsmax += 10 + ci.messages.length();
