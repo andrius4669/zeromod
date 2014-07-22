@@ -533,7 +533,7 @@ namespace server
 
     VAR(anticheat_bantime, -1, 0, 14*24*60);  // ban time, in minutes
 
-    void addpban(const char *name, const char *reason);
+    extern void addgban(int master, const char *name);
 
     void _cheater(clientinfo *ci, const char *s, int type, int n)
     {
@@ -605,7 +605,7 @@ namespace server
             {
                 uint ip = getclientip(ci->ownernum);
                 if(anticheat_bantime > 0) addban(ip, anticheat_bantime*60000, true);
-                else addpban(getclienthostname(ci->ownernum), NULL);
+                else addgban(-1, getclienthostname(ci->ownernum));
                 loopvrev(clients)
                 {
                     clientinfo &c = *clients[i];
@@ -3625,47 +3625,9 @@ namespace server
         }
     }
 
-    struct pbaninfo
-    {
-        enet_uint32 ip, mask;
-        char reason[80];
-    };
-    vector<pbaninfo> pbans;
+    ICOMMAND(clearpbans, "", (), { cleargbans(-1); });
 
-    void clearpbans()
-    {
-        pbans.shrink(0);
-    }
-    COMMAND(clearpbans, "");
-
-    bool checkpban(uint ip)
-    {
-        loopvrev(pbans) if((ip & pbans[i].mask) == pbans[i].ip) return true;
-        return false;
-    }
-
-    void addpban(const char *name, const char *reason)
-    {
-        pbaninfo b;
-        union { uchar b[sizeof(enet_uint32)]; enet_uint32 i; } ip, mask;
-        ip.i = 0;
-        mask.i = 0;
-        loopi(4)
-        {
-            char *end = NULL;
-            int n = strtol(name, &end, 10);
-            if(!end) break;
-            if(end > name) { ip.b[i] = n; mask.b[i] = 0xFF; }
-            name = end;
-            while(*name && *name++ != '.');
-        }
-        b.ip = ip.i;
-        b.mask = mask.i;
-        if(reason) filtertext(b.reason, reason, true, 80);
-        else b.reason[0] = 0;
-        pbans.add(b);
-    }
-    COMMAND(addpban, "ss");
+    ICOMMAND(addpban, "s", (char *s), { addgban(-1, s); });
 /*
     struct reservedname
     {
@@ -3694,7 +3656,6 @@ namespace server
         uint ip = getclientip(ci->clientnum);
         loopvrev(bannedips) if(bannedips[i].ip==ip) return DISC_IPBAN;
         if(checkgban(ip)) return DISC_IPBAN;
-        if(checkpban(ip)) return DISC_IPBAN;
         if(mastermode>=MM_PRIVATE && allowedips.find(ip)<0) return DISC_PRIVATE;
         //if(nameprotection(ci->name)) return DISC_PASSWORD;
         return DISC_NONE;

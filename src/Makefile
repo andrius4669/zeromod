@@ -1,5 +1,5 @@
 CXXFLAGS= -O3 -fomit-frame-pointer
-override CXXFLAGS+= -Wall -fsigned-char -fno-exceptions -fno-rtti -DMAXCLIENTS=128 -DMAXBOTS=32
+override CXXFLAGS+= -Wall -fsigned-char -fno-exceptions -fno-rtti
 
 # get platform name
 PLATFORM= $(shell uname -s)
