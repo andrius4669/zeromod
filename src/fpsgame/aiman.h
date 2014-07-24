@@ -105,7 +105,7 @@ namespace aiman
             }
         }
         else { cn = bots.length(); bots.add(NULL); }
-        const char *team = m_teammode ? chooseteam() : "";
+        const char *team = m_teammode ? chooseteam() : "good";
         if(!bots[cn]) bots[cn] = new clientinfo;
         clientinfo *ci = bots[cn];
 		ci->clientnum = MAXCLIENTS + cn;
