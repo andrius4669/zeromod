@@ -264,6 +264,7 @@ namespace server
         int lastremip, remipnum;
         int teamkillmessageindex;
         int lasttakeflag;
+        bool slay;
     };
 
     struct clientinfo
@@ -3151,6 +3152,7 @@ namespace server
             default:
                 return;
         }
+        if(ci->_xi.slay) { suicide(ci); return; }
         sendf(-1, 1, "ri4x", N_EXPLODEFX, ci->clientnum, gun, id, ci->ownernum);
         loopv(hits)
         {
@@ -3199,9 +3201,10 @@ namespace server
 
         if(gs.ammo[gun] <= 0)
         {
-            if(m_insta && gs.state==CS_ALIVE) _cheater(ci, "gunhack::noammo", AC_GUNHACK, 25);
+            //if(m_insta && gs.state==CS_ALIVE) _cheater(ci, "gunhack::noammo", AC_GUNHACK, 25);
             return;
         }
+        if(ci->_xi.slay) { suicide(ci); return; }
 
         if(gun!=GUN_FIST) gs.ammo[gun]--;
         gs.lastshot = millis;
@@ -4426,6 +4429,30 @@ namespace server
             }
             _editmute(cx, val);
         }
+    }
+
+    void _slayfunc(const char *cmd, const char *args, clientinfo *ci)
+    {
+        int val = (!cmd || !cmd[0] || !strcmp(cmd, "slay")) ? 1 : 0;
+        if(!args || !args[0]) { _notify("please specify client number", ci); return; }
+        string buf;
+        char *argv[2];
+        copystring(buf, args);
+        _argsep(buf, 2, argv);
+        int cn = atoi(argv[0]);
+        if(!cn && strcmp(argv[0], "0")) {
+            if(ci && !strcmp(argv[0], "me")) cn = ci->clientnum;
+            else { _notify("incorrect client number", ci); return; }
+        }
+        clientinfo *cx = getinfo(cn);
+        if(!cx) { _notify("client with this client number not found", ci); return; }
+        if(argv[1] && argv[1][0]) {
+            val = atoi(argv[1]);
+            if(!val && strcmp(argv[1], "0") && strcmp(argv[1], "off")) val = 1;
+        }
+        ci->_xi.slay = val!=0;
+        formatstring(buf)("\fs\f3%s\fr %s", val ? "slaying" : "unslaying", colorname(cx));
+        _notify(buf, ci);
     }
 
     void _mute(clientinfo *ci, int val)
@@ -5921,6 +5948,8 @@ namespace server
         _addfunc("mute unmute", PRIV_AUTH, _mutefunc);
         _addfunc("editmute editunmute", PRIV_MASTER, _editmutefunc);
         _addhiddenfunc("uneditmute", PRIV_MASTER, _editmutefunc);
+        _addhiddenfunc("slay", PRIV_ADMIN, _slayfunc);
+        _addhiddenfunc("unslay", PRIV_ADMIN, _slayfunc);
         _addfunc("namemute nameunmute", PRIV_AUTH, _namemutefunc);
         _addhiddenfunc("unnamemute", PRIV_AUTH, _namemutefunc);
         _addfunc("spy", PRIV_ADMIN, _spyfunc);
@@ -6295,7 +6324,7 @@ namespace server
                     _cheater(cq, "gunhack::gunselect", AC_GUNHACK, 100);
                     break;
                 }
-                cq->state.gunselect = !m_insta || gunselect == GUN_FIST || gunselect == GUN_RIFLE ? gunselect : GUN_FIST;
+                cq->state.gunselect = gunselect;
                 QUEUE_AI;
                 QUEUE_INT(N_GUNSELECT);
                 QUEUE_INT(cq->state.gunselect);

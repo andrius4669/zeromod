@@ -274,8 +274,8 @@ char *z_init(void *getext, void *setext, char *args)
         else if(debug) debug("Failed to load GeoIPCity database (GeoLiteCity.dat)");
     }
 
-    if(gi) GeoIP_set_charset(gi, GEOIP_CHARSET_UTF8);
-    if(gic) GeoIP_set_charset(gic, GEOIP_CHARSET_UTF8);
+    //if(gi) GeoIP_set_charset(gi, GEOIP_CHARSET_UTF8);
+    //if(gic) GeoIP_set_charset(gic, GEOIP_CHARSET_UTF8);
 
     addhook("connected", on_connect);
 
