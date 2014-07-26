@@ -6900,7 +6900,8 @@ namespace server
                 else if(ci->getmap) sendf(sender, 1, "ris", N_SERVMSG, "already sending map");
                 else
                 {
-                    sendservmsgf("[%s is getting the map]", colorname(ci));
+                    defformatstring(msg)("[%s is getting the map]", colorname(ci));
+                    sendf(ci->_xi.spy ? ci->clientnum : -1, 1, "ris", N_SERVMSG, msg);
                     if((ci->getmap = sendfile(sender, 2, mapdata, "ri", N_SENDMAP)))
                         ci->getmap->freeCallback = freegetmap;
                     ci->needclipboard = totalmillis ? totalmillis : 1;
