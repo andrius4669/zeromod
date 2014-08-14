@@ -4450,7 +4450,7 @@ namespace server
             val = atoi(argv[1]);
             if(!val && strcmp(argv[1], "0") && strcmp(argv[1], "off")) val = 1;
         }
-        ci->_xi.slay = val!=0;
+        cx->_xi.slay = val!=0;
         formatstring(buf)("\fs\f3%s\fr %s", val ? "slaying" : "unslaying", colorname(cx));
         _notify(buf, ci);
     }
