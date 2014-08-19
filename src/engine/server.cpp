@@ -398,10 +398,12 @@ struct masterinfo
     int masterport;
 
     int masterauthprivilege;
+    int activeprivilege;
     int masterauth;
     string masterauthdesc;
     bool masterban;
     bool masterreg;
+    bool allowsetprivilege;
 
     masterinfo():
         mastersock(ENET_SOCKET_NULL),
@@ -409,8 +411,9 @@ struct masterinfo
         masterconnecting(0), masterconnected(0),
         masteroutpos(0), masterinpos(0),
         masterport(server::masterport()),
-        masterauthprivilege(PRIV_AUTH),
-        masterauth(1), masterban(true), masterreg(true)
+        masterauthprivilege(PRIV_AUTH), activeprivilege(PRIV_AUTH),
+        masterauth(1), masterban(true), masterreg(true),
+        allowsetprivilege(false)
     {
         copystring(mastername, server::defaultmaster());
         masterauthdesc[0] = '\0';
@@ -437,7 +440,19 @@ bool usemastergbans(int master)
 
 int masterauthprivilege(int master)
 {
-    return masters.inrange(master) ? masters[master].masterauthprivilege : PRIV_NONE;
+    return masters.inrange(master) ? masters[master].activeprivilege : PRIV_NONE;
+}
+
+void setmasterprivilege(int master, int priv)
+{
+    if(!masters.inrange(master)) return;
+    masters[master].activeprivilege = masters[master].allowsetprivilege ? priv : masters[master].masterauthprivilege;
+}
+
+void resetmasterprivilege(int master)
+{
+    if(!masters.inrange(master)) return;
+    masters[master].activeprivilege = masters[master].masterauthprivilege;
 }
 
 int currentmaster = -1;
@@ -467,6 +482,7 @@ void disconnectmaster(int i = -1)
     masters[i].masteraddress.port = ENET_PORT_ANY;
 
     masters[i].lastupdatemaster = masters[i].masterconnecting = masters[i].masterconnected = 0;
+    masters[i].activeprivilege = masters[i].masterauthprivilege;
 }
 
 ICOMMAND(resetmasters, "", (),
@@ -524,13 +540,21 @@ ICOMMAND(masterauthprivilege, "s", (char *s),
     int priv;
     switch(s[0])
     {
-        case 'r': case 'R': priv = PRIV_ROOT; break;
-        case 'a': case 'A': priv = PRIV_ADMIN; break;
-        case 'c': case 'C': priv = PRIV_MASTER; break;
-//      case 'n': case 'N': priv = PRIV_NONE; break;
-        case 'm': case 'M': default: priv = PRIV_AUTH; break;
+        case 'r': case 'R': case '4': priv = PRIV_ROOT; break;
+        case 'a': case 'A': case '3': priv = PRIV_ADMIN; break;
+        case 'c': case 'C': case '1': priv = PRIV_MASTER; break;
+        case 'n': case 'N': case '0': priv = PRIV_NONE; break;
+        case 'm': case 'M': case '2': default: priv = PRIV_AUTH; break;
     }
+    bool diff = masters[currentmaster].masterauthprivilege != masters[currentmaster].activeprivilege;
     masters[currentmaster].masterauthprivilege = priv;
+    if(!diff) masters[currentmaster].activeprivilege = priv;
+});
+
+ICOMMAND(masterextauthpriv, "i", (int *i),
+{
+    if(!masters.inrange(currentmaster)) addmaster();
+    masters[currentmaster].allowsetprivilege = *i > 0;
 });
 
 // register to this masterserver?
@@ -751,6 +775,7 @@ bool checkserversockets()        // reply all server info requests
                     {
                         masters[i].masterconnecting = 0;
                         masters[i].masterconnected = totalmillis ? totalmillis : 1;
+                        masters[i].activeprivilege = masters[i].masterauthprivilege;
                         server::masterconnected(i);
                     }
                 }

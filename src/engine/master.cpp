@@ -21,8 +21,11 @@ struct userinfo
 {
     char *name;
     void *pubkey;
+    int privilege;
 };
 hashtable<char *, userinfo> users;
+
+VAR(authpriv, 0, 2, 3);
 
 void adduser(char *name, char *pubkey)
 {
@@ -30,8 +33,39 @@ void adduser(char *name, char *pubkey)
     userinfo &u = users[name];
     u.name = name;
     u.pubkey = parsepubkey(pubkey);
+    u.privilege = -1;
 }
-COMMAND(adduser, "ss");
+
+int parseprivilege(const char *s)
+{
+    int priv;
+    switch(*s)
+    {
+        case 'A': case 'a': case 'r': case 'R': case '3': priv = 3;
+        case 'C': case 'c': case '1': priv = 1;
+        case 'n': case 'N': case '0': priv = 0;
+        case 'M': case 'm': case '2': default: priv = 2;
+    }
+    return priv;
+}
+
+void adduserex(char *name, char *desc, char *pubkey, char *priv)
+{
+    name = newstring(name);
+    userinfo &u = users[name];
+    u.name = name;
+    u.pubkey = parsepubkey(pubkey);
+    // TODO: include desc
+    u.privilege = *priv ? parseprivilege(priv) : -1;
+}
+
+ICOMMAND(adduser, "ssssN", (char *name, char *desc, char *key, char *priv, int *n),
+{
+    /* adduser name pubkey */
+    if(*n <= 2) adduser(name, desc);
+    /* adduser name desc pubkey priv */
+    else adduserex(name, desc, key, priv);
+});
 
 void clearusers()
 {
@@ -103,6 +137,7 @@ struct authreq
     enet_uint32 reqtime;
     uint id;
     void *answer;
+    int privilege;
 };
 
 struct gameserver
@@ -518,6 +553,7 @@ void reqauth(client &c, uint id, char *name)
     static vector<char> buf;
     buf.setsize(0);
     a.answer = genchallenge(u->pubkey, seed, sizeof(seed), buf);
+    a.privilege = u->privilege;
 
     outputf(c, "chalauth %u %s\n", id, buf.getbuf());
 }
@@ -532,6 +568,11 @@ void confauth(client &c, uint id, const char *val)
         if(enet_address_get_host_ip(&c.address, ip, sizeof(ip)) < 0) copystring(ip, "-");
         if(checkchallenge(val, c.authreqs[i].answer))
         {
+            if(c.authreqs[i].privilege >= 0 && c.authreqs[i].privilege != authpriv)
+            {
+                char privs[4] = { '0', 'c', 'm', 'a' };
+                outputf(c, "z_priv %c\n", privs[c.authreqs[i].privilege]);
+            }
             outputf(c, "succauth %u\n", id);
             conoutf("succeeded %u from %s", id, ip);
         }
@@ -614,7 +655,7 @@ void checkclients()
         else ENET_SOCKETSET_ADD(readset, c.socket);
         maxsock = max(maxsock, c.socket);
     }
-    if(enet_socketset_select(maxsock, &readset, &writeset, 1000)<=0) return;
+    if(enet_socketset_select(maxsock, &readset, &writeset, 2000)<=0) return;
 
     if(ENET_SOCKETSET_CHECK(readset, pingsocket)) checkserverpongs();
     if(ENET_SOCKETSET_CHECK(readset, serversocket))

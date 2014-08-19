@@ -1839,11 +1839,11 @@ namespace server
         u.pubkey = parsepubkey(pubkey);
         switch(priv[0])
         {
-            case 'r': case 'R': u.privilege = PRIV_ROOT; break;
-            case 'a': case 'A': u.privilege = PRIV_ADMIN; break;
-            case 'c': case 'C': u.privilege = PRIV_MASTER; break;
-            // case 'n': case 'N': u.privilege = PRIV_NONE; break; // uncomment then nameprotection is done
-            case 'm': case 'M': default: u.privilege = PRIV_AUTH; break;
+            case 'r': case 'R': case '4': u.privilege = PRIV_ROOT; break;
+            case 'a': case 'A': case '3': u.privilege = PRIV_ADMIN; break;
+            case 'c': case 'C': case '1': u.privilege = PRIV_MASTER; break;
+            case 'n': case 'N': case '0': u.privilege = PRIV_NONE; break; // excempt from bans or nameprotect (not done yet)
+            case 'm': case 'M': case '2': default: u.privilege = PRIV_AUTH; break;
         }
     }
     COMMAND(adduser, "ssss");
@@ -3856,10 +3856,23 @@ namespace server
             ci = findauth(id);
             if(ci && ci->authmaster == i) authfailed(ci);
         }
+        else if(sscanf(cmd, "z_priv %255s", val))
+        {
+            int priv;
+            switch(val[0])
+            {
+                case 'c': case 'C': case '1': priv = PRIV_MASTER;
+                case 'a': case 'A': case '3': priv = PRIV_ADMIN;
+                case 'n': case 'N': case '0': priv = PRIV_NONE;
+                case 'm': case 'M': case '2': default: priv = PRIV_AUTH;
+            }
+            setmasterprivilege(i, priv);
+        }
         else if(sscanf(cmd, "succauth %u", &id) == 1)
         {
             ci = findauth(id);
             if(ci && ci->authmaster == i) authsucceeded(ci);
+            resetmasterprivilege(i);
         }
         else if(sscanf(cmd, "chalauth %u %255s", &id, val) == 2)
         {
@@ -7008,15 +7021,10 @@ namespace server
                 int victim = getint(p);
                 getstring(text, p);
                 filtertext(text, text);
-                int authpriv = PRIV_AUTH;
+                int authpriv = PRIV_ADMIN;
                 userinfo *u = NULL;
                 if(desc[0]) u = users.access(userkey(name, desc));
                 if(u) authpriv = u->privilege;
-                else
-                {
-                    authpriv = masterauthprivilege(findauthmaster(desc));
-                    if(!authpriv) break;
-                }
                 if(trykick(ci, victim, text, name, desc, authpriv, true) && tryauth(ci, name, desc))
                 {
                     ci->authkickvictim = victim;
