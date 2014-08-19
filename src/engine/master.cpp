@@ -41,10 +41,10 @@ int parseprivilege(const char *s)
     int priv;
     switch(*s)
     {
-        case 'A': case 'a': case 'r': case 'R': case '3': priv = 3;
-        case 'C': case 'c': case '1': priv = 1;
-        case 'n': case 'N': case '0': priv = 0;
-        case 'M': case 'm': case '2': default: priv = 2;
+        case 'A': case 'a': case 'r': case 'R': case '3': priv = 3; break;
+        case 'C': case 'c': case '1': priv = 1; break;
+        case 'n': case 'N': case '0': priv = 0; break;
+        case 'M': case 'm': case '2': default: priv = 2; break;
     }
     return priv;
 }

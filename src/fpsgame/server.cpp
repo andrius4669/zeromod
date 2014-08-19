@@ -3851,6 +3851,7 @@ namespace server
         uint id;
         string val;
         clientinfo *ci;
+        logoutf("master: [%s] [%s]", cmd, args);
         if(sscanf(cmd, "failauth %u", &id) == 1)
         {
             ci = findauth(id);
@@ -3861,10 +3862,10 @@ namespace server
             int priv;
             switch(val[0])
             {
-                case 'c': case 'C': case '1': priv = PRIV_MASTER;
-                case 'a': case 'A': case '3': priv = PRIV_ADMIN;
-                case 'n': case 'N': case '0': priv = PRIV_NONE;
-                case 'm': case 'M': case '2': default: priv = PRIV_AUTH;
+                case 'c': case 'C': case '1': priv = PRIV_MASTER; break;
+                case 'a': case 'A': case '3': priv = PRIV_ADMIN; break;
+                case 'n': case 'N': case '0': priv = PRIV_NONE; break;
+                case 'm': case 'M': case '2': default: priv = PRIV_AUTH; break;
             }
             setmasterprivilege(i, priv);
         }
