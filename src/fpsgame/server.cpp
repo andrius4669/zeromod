@@ -3851,7 +3851,6 @@ namespace server
         uint id;
         string val;
         clientinfo *ci;
-        logoutf("master: [%s] [%s]", cmd, args);
         if(sscanf(cmd, "failauth %u", &id) == 1)
         {
             ci = findauth(id);
