@@ -38,15 +38,14 @@ void adduser(char *name, char *pubkey)
 
 int parseprivilege(const char *s)
 {
-    int priv;
     switch(*s)
     {
-        case 'A': case 'a': case 'r': case 'R': case '3': priv = 3; break;
-        case 'C': case 'c': case '1': priv = 1; break;
-        case 'n': case 'N': case '0': priv = 0; break;
-        case 'M': case 'm': case '2': default: priv = 2; break;
+        case 'A': case 'a': case 'R': case 'r': case '3': return 3;
+        case 'M': case 'm': case '2': return 2;
+        case 'C': case 'c': case '1': return 1;
+        case 'N': case 'n': case '0': return 0;
+        default: return -1;
     }
-    return priv;
 }
 
 void adduserex(char *name, char *desc, char *pubkey, char *priv)
@@ -56,7 +55,7 @@ void adduserex(char *name, char *desc, char *pubkey, char *priv)
     u.name = name;
     u.pubkey = parsepubkey(pubkey);
     // TODO: include desc
-    u.privilege = *priv ? parseprivilege(priv) : -1;
+    u.privilege = parseprivilege(priv);
 }
 
 ICOMMAND(adduser, "ssssN", (char *name, char *desc, char *key, char *priv, int *n),
@@ -614,7 +613,7 @@ bool checkclientinput(client &c)
         else if(sscanf(c.input, "regserv %d", &port) == 1)
         {
             if(checkban(servbans, c.address.host)) return false;
-            if(port < 0 || port + 1 < 0 || (c.servport >= 0 && port != c.servport)) outputf(c, "failreg invalid port\n");
+            if(port < 0 || port > 0xFFFF-1 || (c.servport >= 0 && port != c.servport)) outputf(c, "failreg invalid port\n");
             else
             {
                 c.servport = port;
