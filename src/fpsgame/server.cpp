@@ -5904,6 +5904,51 @@ namespace server
         quitserver = true;
     }
 
+    /* #srvent id x y z type a1 a2 a3 a4 a5 */
+    void _srventfunc(const char *cmd, const char *args, clientinfo *ci)
+    {
+        string buf;
+        char *argv[10];
+        if(!args || !args[0]) return;
+        copystring(buf, args);
+        _argsep(buf, 10, argv);
+
+        bool reliable = true;
+        if(!strcmp(cmd, "srventu")) reliable = false;
+
+        int id = 0;
+        double x = 0.0, y = 0.0, z = 0.0;
+        int t = 0;
+        int a[5] = { 0, 0, 0, 0, 0 };
+
+        if(argv[0] && *argv[0]) id = atoi(argv[0]);
+        if(argv[1] && *argv[1]) x  = atof(argv[1]);
+        if(argv[2] && *argv[2]) y  = atof(argv[2]);
+        if(argv[3] && *argv[3]) z  = atof(argv[3]);
+        if(argv[4] && *argv[4]) t  = atoi(argv[4]);
+        loopi(5) if(argv[i+5] && *argv[i+5]) a[i] = atoi(argv[i+5]);
+
+        uchar buf[100];
+        ucharbuf b(buf, sizeof(buf));
+        putint(b, N_EDITENT);
+        putint(b, id);
+        putint(b, int(x*DMF));
+        putint(b, int(y*DMF));
+        putint(b, int(z*DMF));
+        putint(b, t);
+        loopi(5) putint(b, a[i]);
+
+        loopv(clients) if(clients[i]->aitype==AI_NONE)
+        {
+            packetbuf p(100, reliable ? ENET_PACKET_FLAG_RELIABLE : 0);
+            putint(p, N_CLIENT);
+            putint(p, clients[i]->clientnum);
+            putint(p, b.len);
+            p.put(buf, b.len);
+            sendpacket(ci->clientnum, 1, p.finalize());
+        }
+    }
+
 //  >>> Server internals
 
     static void _addfunc(const char *s, int priv, void (*_func)(const char *cmd, const char *args, clientinfo *ci))
@@ -5983,6 +6028,8 @@ namespace server
         _addfunc("persist", PRIV_MASTER, _persistfunc);
         _addfunc("autosendmap", PRIV_MASTER, _autosendmapfunc);
         _addfunc("halt", PRIV_ROOT, _haltfunc);
+        _addhiddenfunc("srvent", PRIV_ADMIN, _srventfunc);
+        _addhiddenfunc("srventu", PRIV_ADMIN, _srventfunc);
     }
 
     void _privfail(clientinfo *ci)
