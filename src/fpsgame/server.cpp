@@ -5928,8 +5928,8 @@ namespace server
         if(argv[4] && *argv[4]) t  = atoi(argv[4]);
         loopi(5) if(argv[i+5] && *argv[i+5]) a[i] = atoi(argv[i+5]);
 
-        uchar buf[100];
-        ucharbuf b(buf, sizeof(buf));
+        uchar cbuf[100];
+        ucharbuf b(cbuf, sizeof(cbuf));
         putint(b, N_EDITENT);
         putint(b, id);
         putint(b, int(x*DMF));
@@ -5938,13 +5938,13 @@ namespace server
         putint(b, t);
         loopi(5) putint(b, a[i]);
 
-        loopv(clients) if(clients[i]->aitype==AI_NONE)
+        loopv(clients) if(clients[i]->state.aitype==AI_NONE)
         {
             packetbuf p(100, reliable ? ENET_PACKET_FLAG_RELIABLE : 0);
             putint(p, N_CLIENT);
             putint(p, clients[i]->clientnum);
             putint(p, b.len);
-            p.put(buf, b.len);
+            p.put(cbuf, b.len);
             sendpacket(ci->clientnum, 1, p.finalize());
         }
     }
