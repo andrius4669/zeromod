@@ -3033,11 +3033,13 @@ namespace server
     void startintermission() { gamelimit = min(gamelimit, gamemillis); checkintermission(); }
 
     VAR(allowmultikill, 0, 0, 1);
+    VAR(antispawnkill, 0, 0, 5000);
 
     void dodamage(clientinfo *target, clientinfo *actor, int damage, int gun, const vec &hitpush = vec(0, 0, 0))
     {
         gamestate &ts = target->state;
         //zeromod
+        if(antispawnkill && ts.lastdeath && gamemillis-ts.lastdeath<=antispawnkill) return; /* ts.lastdeath is reused for spawntime */
         if(!m_edit || !_nodamage || (_nodamage == 1 ? 0 : (target->_xi.editmute && actor->_xi.editmute))) ts.dodamage(damage);
         if(target!=actor && !isteam(target->team, actor->team)) actor->state.damage += damage;
         sendf(-1, 1, "ri6", N_DAMAGE, target->clientnum, actor->clientnum, damage, ts.armour, ts.health);
@@ -6397,6 +6399,7 @@ namespace server
                 if(!cq || (cq->state.state!=CS_ALIVE && cq->state.state!=CS_DEAD) || ls!=cq->state.lifesequence || cq->state.lastspawn<0 || cq->_xi.spy) break;
                 cq->state.lastspawn = -1;
                 cq->state.state = CS_ALIVE;
+                cq->state.lastdeath = gamemillis; // reuse lastdeath to know spawntime
                 cq->state.gunselect = gunselect >= GUN_FIST && gunselect <= GUN_PISTOL ? gunselect : GUN_FIST;
                 cq->exceeded = 0;
                 if(smode) smode->spawned(cq);
