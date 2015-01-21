@@ -1,5 +1,7 @@
 This is zeromod, a modification of sauerbraten game server.
 
+deprecated in favour of zeromod-sauerbraten project
+
 Features:
 	* Has server commands interface
 	* Can reload configuration on-the-fly (via SIGUSR1 or #exec)
