@@ -46,10 +46,10 @@ endif
 
 ifneq (,$(findstring MINGW,$(PLATFORM)))
 GAK_INCLUDES= -DSTANDALONE $(INCLUDES) -Iinclude
-GAK_LIBS= $(STD_LIBS) -L$(WINBIN) -L$(WINLIB) -lzlib1 -lenet -lws2_32 -lwinmm
+GAK_LIBS= $(STD_LIBS) -L$(WINBIN) -L$(WINLIB) -lzlib1 -lenet -lsodium -lws2_32 -lwinmm
 else
 GAK_INCLUDES= -DSTANDALONE $(INCLUDES)
-GAK_LIBS= -L../enet -lenet -lz
+GAK_LIBS= -L../enet -lenet -lsodium -lz
 endif
 
 GAK_OBJS= \

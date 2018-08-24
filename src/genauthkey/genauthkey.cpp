@@ -1,7 +1,10 @@
-// including cpp file, cause we will use internal its structures
+#include <stdio.h>
+#include <stdint.h>
+#include <sodium.h>
+
+// including cpp file, cause we will use its internal structures
 // cube.h is included by it automatically
 #include "crypto.cpp"
-#include <enet/time.h>
 
 enum { AM_SECRETPASS = 0, AM_PRIVKEY, AM_RANDOMPASS };
 
@@ -11,7 +14,6 @@ void printhelp(const char *progname)
     printf("       %s  -p  privatekey\n", progname);
     printf("       %s  -r\n", progname);
     printf("generates authkey pair for sauerbraten servers and clients\n");
-    printf("\n");
     printf("  -h                   this help screen\n");
     printf("  -s secretpass        use secret password to generate key pair\n");
     printf("  -p privatekey        use private key to generate public key\n");
@@ -98,21 +100,27 @@ int main(int argc, char **argv)
     if(!seed[0])
     {
         // generate random password
-        // for better randomness, use enet_time_get function from enet
-        seedMT(enet_time_get());
-        // randomly select password length
-        uint s = (randomMT()%8)+4;
-        // characters used in password
-        static const char * const characters = "defghijk567IJPQRSTUVXYZ~89abcnlm01234o;pqKLM:NOrsCDEFH!@#$%&*()_-+=[]{}/\\|?<>,. tuvwxyzAB";
-        uint sz = strlen(characters);
-        char *p = seed;
-        for(uint i = 0; i < s; i++)
+
+        if(sodium_init() < 0)
         {
-            uint n = randomMT();
-            *p++ = characters[(n&0xFF)%sz];
-            *p++ = characters[((n>>8)&0xFF)%sz];
-            *p++ = characters[((n>>16)&0xFF)%sz];
-            *p++ = characters[((n>>24)&0xFF)%sz];
+            fprintf(stderr, "sodium_init() failed\n");
+            return 1;
+        }
+
+        // randomly select password length
+        uint32_t s = 16 + randombytes_uniform(8);
+        // characters used in password
+        static const char characters[] =
+            "0123456789"
+            "ABCDEFGHIJKLMNOPQRSTUVXYZ"
+            "abcdefghijklmnopqrstuvxyz"
+            "!#$%&*+,-./<=>?@_`";
+        uint32_t sz = sizeof(characters)-1;
+        char *p = seed;
+        for(uint32_t i = 0; i < s; i++)
+        {
+            *p++ = characters[randombytes_uniform(sz)];
+            *p++ = characters[randombytes_uniform(sz)];
         }
     }
 
@@ -124,34 +132,34 @@ int main(int argc, char **argv)
         vector<char> privstr;
         tiger::hash((const uchar *)seed, (int)strlen(seed), hash);
         memcpy(privkey.digits, hash.bytes, sizeof(hash.bytes));
-        memset(hash.bytes, 0, sizeof(hash.bytes));
+        sodium_memzero(hash.bytes, sizeof(hash.bytes));
         privkey.len = 8*sizeof(hash.bytes)/BI_DIGIT_BITS;
         privkey.shrink();
         privkey.printdigits(privstr);
         privstr.add('\0');
         if(mode==AM_RANDOMPASS || verbose>1) printf("%s%s\n", verbose>0 ? "secure pass: " : "", seed);
-        memset(seed, 0, sizeof(seed));
+        sodium_memzero(seed, sizeof(seed));
         printf("%s%s\n", verbose>0 ? "private key: " : "", privstr.getbuf());
-        memset(privstr.getbuf(), 0, privstr.length());
+        sodium_memzero(privstr.getbuf(), privstr.length());
     }
     else
     {
         privkey.parse(seed);
-        memset(seed, 0, sizeof(seed));
+        sodium_memzero(seed, sizeof(seed));
         if(verbose>1)
         {
             vector<char> privstr;
             privkey.printdigits(privstr);
             privstr.add('\0');
             printf("private key: %s\n", privstr.getbuf());
-            memset(privstr.getbuf(), 0, privstr.length());
+            sodium_memzero(privstr.getbuf(), privstr.length());
         }
     }
 
     vector<char> pubstr;
     ecjacobian c(ecjacobian::base);
     c.mul(privkey);
-    memset(privkey.digits, 0, privkey.len);
+    sodium_memzero(privkey.digits, privkey.len);
     c.normalize();
     c.print(pubstr);
     pubstr.add('\0');
